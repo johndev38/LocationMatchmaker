@@ -114,6 +114,7 @@ export default function Dashboard() {
                 <CardContent>
                   <div className="space-y-2">
                     <p>Localisation : {request.location}</p>
+                    <p>Type : {request.locationType.charAt(0).toUpperCase() + request.locationType.slice(1)}</p>
                     <p>Distance max : {request.maxDistance}km</p>
                     <p>Personnes : {request.peopleCount}</p>
                     <p>Budget : {request.maxBudget}€</p>

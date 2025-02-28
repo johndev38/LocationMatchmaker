@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertRentalRequestSchema } from "@shared/schema";
+import { insertRentalRequestSchema, locationTypes } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, Home } from "lucide-react";
@@ -19,6 +20,7 @@ export default function HomePage() {
     resolver: zodResolver(insertRentalRequestSchema),
     defaultValues: {
       location: "",
+      locationType: "ville",
       maxDistance: 100,
       peopleCount: 1,
       maxBudget: 1000,
@@ -94,6 +96,33 @@ export default function HomePage() {
                       <FormControl>
                         <Input placeholder="Entrez votre localisation souhaitée" {...field} />
                       </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="locationType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Type de location</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionnez un type de location" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {locationTypes.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type.charAt(0).toUpperCase() + type.slice(1)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </FormItem>
                   )}
                 />

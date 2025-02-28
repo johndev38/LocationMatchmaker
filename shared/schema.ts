@@ -13,6 +13,7 @@ export const rentalRequests = pgTable("rental_requests", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   location: text("location").notNull(),
+  locationType: text("location_type").notNull(),
   maxDistance: integer("max_distance").notNull(),
   peopleCount: integer("people_count").notNull(),
   maxBudget: integer("max_budget").notNull(),
@@ -42,11 +43,25 @@ export const insertUserSchema = createInsertSchema(users).pick({
   isLandlord: true,
 });
 
-export const insertRentalRequestSchema = createInsertSchema(rentalRequests).omit({
-  id: true,
-  userId: true,
-  status: true,
-});
+export const locationTypes = [
+  "ville",
+  "montagne",
+  "mer",
+  "campagne",
+  "ferme",
+  "lac",
+  "forêt",
+] as const;
+
+export const insertRentalRequestSchema = createInsertSchema(rentalRequests)
+  .omit({
+    id: true,
+    userId: true,
+    status: true,
+  })
+  .extend({
+    locationType: z.enum(locationTypes),
+  });
 
 export const insertPropertyOfferSchema = createInsertSchema(propertyOffers).omit({
   id: true,
