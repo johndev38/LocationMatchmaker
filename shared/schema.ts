@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -14,7 +14,7 @@ export const rentalRequests = pgTable("rental_requests", {
   userId: integer("user_id").notNull(),
   departureCity: text("departure_city").notNull(),
   location: text("location").notNull(),
-  locationType: text("location_type").notNull(),
+  locationType: text("location_type").array().notNull(),
   maxDistance: integer("max_distance").notNull(),
   peopleCount: integer("people_count").notNull(),
   maxBudget: integer("max_budget").notNull(),
@@ -61,7 +61,7 @@ export const insertRentalRequestSchema = createInsertSchema(rentalRequests)
     status: true,
   })
   .extend({
-    locationType: z.enum(locationTypes),
+    locationType: z.array(z.enum(locationTypes)).min(1, "Sélectionnez au moins un type de destination"),
   });
 
 export const insertPropertyOfferSchema = createInsertSchema(propertyOffers).omit({

@@ -6,9 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Home } from "lucide-react";
+import { Loader2, Home, Mountain, Waves, Building2, Trees, Warehouse, Leaf, Droplets } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+
+const locationTypeIcons = {
+  ville: <Building2 className="h-4 w-4" />,
+  montagne: <Mountain className="h-4 w-4" />,
+  mer: <Waves className="h-4 w-4" />,
+  campagne: <Trees className="h-4 w-4" />,
+  ferme: <Warehouse className="h-4 w-4" />,
+  forêt: <Leaf className="h-4 w-4" />,
+  lac: <Droplets className="h-4 w-4" />,
+};
 
 export default function Dashboard() {
   const { user, logoutMutation } = useAuth();
@@ -115,7 +125,18 @@ export default function Dashboard() {
                   <div className="space-y-2">
                     <p>Départ de : {request.departureCity}</p>
                     <p>Destination : {request.location}</p>
-                    <p>Type : {request.locationType.charAt(0).toUpperCase() + request.locationType.slice(1)}</p>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span>Types : </span>
+                      {request.locationType.map((type: string) => (
+                        <div
+                          key={type}
+                          className="flex items-center gap-1 bg-muted rounded-full px-3 py-1 text-sm"
+                        >
+                          {locationTypeIcons[type as keyof typeof locationTypeIcons]}
+                          <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                        </div>
+                      ))}
+                    </div>
                     <p>Distance max : {request.maxDistance}km</p>
                     <p>Personnes : {request.peopleCount}</p>
                     <p>Budget : {request.maxBudget}€</p>

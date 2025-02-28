@@ -7,21 +7,33 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertRentalRequestSchema, locationTypes } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Home } from "lucide-react";
+import { Loader2, Home, Mountain, Waves, Building2, Trees, Warehouse, Leaf, Droplets } from "lucide-react";
+import { useState } from "react";
+
+// Mapping des types de destination avec leurs icônes
+const locationTypeIcons = {
+  ville: <Building2 className="h-6 w-6" />,
+  montagne: <Mountain className="h-6 w-6" />,
+  mer: <Waves className="h-6 w-6" />,
+  campagne: <Trees className="h-6 w-6" />,
+  ferme: <Warehouse className="h-6 w-6" />,
+  forêt: <Leaf className="h-6 w-6" />,
+  lac: <Droplets className="h-6 w-6" />,
+};
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
   const form = useForm({
     resolver: zodResolver(insertRentalRequestSchema),
     defaultValues: {
       departureCity: "",
       location: "",
-      locationType: "ville",
+      locationType: [],
       maxDistance: 100,
       peopleCount: 1,
       maxBudget: 1000,
@@ -40,6 +52,7 @@ export default function HomePage() {
         description: "Votre demande de location a été créée.",
       });
       form.reset();
+      setSelectedTypes([]);
     },
     onError: (error: Error) => {
       toast({
@@ -84,7 +97,7 @@ export default function HomePage() {
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit((data) =>
-                  createRequestMutation.mutate(data)
+                  createRequestMutation.mutate({ ...data, locationType: selectedTypes })
                 )}
                 className="space-y-4"
               >
@@ -117,26 +130,34 @@ export default function HomePage() {
                 <FormField
                   control={form.control}
                   name="locationType"
-                  render={({ field }) => (
+                  render={() => (
                     <FormItem>
-                      <FormLabel>Type de destination</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionnez un type de destination" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {locationTypes.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type.charAt(0).toUpperCase() + type.slice(1)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Types de destination</FormLabel>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {locationTypes.map((type) => (
+                          <Button
+                            key={type}
+                            type="button"
+                            variant={selectedTypes.includes(type) ? "default" : "outline"}
+                            className="h-24 flex flex-col gap-2"
+                            onClick={() => {
+                              const newTypes = selectedTypes.includes(type)
+                                ? selectedTypes.filter((t) => t !== type)
+                                : [...selectedTypes, type];
+                              setSelectedTypes(newTypes);
+                              form.setValue("locationType", newTypes);
+                            }}
+                          >
+                            {locationTypeIcons[type as keyof typeof locationTypeIcons]}
+                            <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                          </Button>
+                        ))}
+                      </div>
+                      {form.formState.errors.locationType && (
+                        <p className="text-sm text-destructive mt-2">
+                          Sélectionnez au moins un type de destination
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
