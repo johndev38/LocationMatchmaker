@@ -1,0 +1,159 @@
+import { useAuth } from "@/hooks/use-auth";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Loader2 } from "lucide-react";
+import { useState } from "react";
+
+export default function Dashboard() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [selectedRequest, setSelectedRequest] = useState<number | null>(null);
+
+  const { data: rentalRequests, isLoading: isLoadingRequests } = useQuery({
+    queryKey: ["/api/rental-requests"],
+  });
+
+  const { data: propertyOffers, isLoading: isLoadingOffers } = useQuery({
+    queryKey: ["/api/property-offers", selectedRequest],
+    enabled: selectedRequest !== null,
+  });
+
+  const createOfferMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/property-offers", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/property-offers", selectedRequest],
+      });
+      toast({
+        title: "Success",
+        description: "Your offer has been submitted.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmitOffer = (requestId: number, event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    createOfferMutation.mutate({
+      requestId,
+      price: parseInt(formData.get("price") as string),
+      description: formData.get("description"),
+    });
+    event.currentTarget.reset();
+  };
+
+  if (isLoadingRequests) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-6">
+        {user.isLandlord ? "Available Requests" : "Your Requests"}
+      </h1>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div>
+          {rentalRequests?.map((request: any) => (
+            <Card
+              key={request.id}
+              className={`mb-4 ${
+                selectedRequest === request.id ? "border-primary" : ""
+              }`}
+            >
+              <CardHeader>
+                <CardTitle>Request #{request.id}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <p>Location: {request.location}</p>
+                  <p>Max Distance: {request.maxDistance}km</p>
+                  <p>People: {request.peopleCount}</p>
+                  <p>Budget: ${request.maxBudget}</p>
+                  {user.isLandlord && (
+                    <form
+                      onSubmit={(e) => handleSubmitOffer(request.id, e)}
+                      className="mt-4 space-y-4"
+                    >
+                      <div>
+                        <Input
+                          name="price"
+                          type="number"
+                          placeholder="Your price"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Textarea
+                          name="description"
+                          placeholder="Describe your property"
+                          required
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        disabled={createOfferMutation.isPending}
+                      >
+                        {createOfferMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Submit Offer
+                      </Button>
+                    </form>
+                  )}
+                  {!user.isLandlord && (
+                    <Button
+                      onClick={() => setSelectedRequest(request.id)}
+                      variant="secondary"
+                    >
+                      View Offers
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {selectedRequest && !user.isLandlord && (
+          <div>
+            <h2 className="text-xl font-bold mb-4">Offers</h2>
+            {isLoadingOffers ? (
+              <Loader2 className="h-8 w-8 animate-spin" />
+            ) : (
+              propertyOffers?.map((offer: any) => (
+                <Card key={offer.id} className="mb-4">
+                  <CardHeader>
+                    <CardTitle>${offer.price}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p>{offer.description}</p>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
