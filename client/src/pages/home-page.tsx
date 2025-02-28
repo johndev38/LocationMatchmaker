@@ -19,6 +19,7 @@ export default function HomePage() {
   const form = useForm({
     resolver: zodResolver(insertRentalRequestSchema),
     defaultValues: {
+      departureCity: "",
       location: "",
       locationType: "ville",
       maxDistance: 100,
@@ -89,12 +90,25 @@ export default function HomePage() {
               >
                 <FormField
                   control={form.control}
+                  name="departureCity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ville de départ</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Entrez votre ville de départ" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Localisation</FormLabel>
+                      <FormLabel>Destination</FormLabel>
                       <FormControl>
-                        <Input placeholder="Entrez votre localisation souhaitée" {...field} />
+                        <Input placeholder="Entrez votre destination souhaitée" {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -105,14 +119,14 @@ export default function HomePage() {
                   name="locationType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Type de location</FormLabel>
+                      <FormLabel>Type de destination</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Sélectionnez un type de location" />
+                            <SelectValue placeholder="Sélectionnez un type de destination" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>

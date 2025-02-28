@@ -12,6 +12,7 @@ export const users = pgTable("users", {
 export const rentalRequests = pgTable("rental_requests", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
+  departureCity: text("departure_city").notNull(),
   location: text("location").notNull(),
   locationType: text("location_type").notNull(),
   maxDistance: integer("max_distance").notNull(),
