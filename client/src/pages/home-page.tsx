@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2 } from "lucide-react";
+import { Loader2, Home } from "lucide-react";
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -33,14 +33,14 @@ export default function HomePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/rental-requests"] });
       toast({
-        title: "Success",
-        description: "Your rental request has been created.",
+        title: "Succès",
+        description: "Votre demande de location a été créée.",
       });
       form.reset();
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "Erreur",
         description: error.message,
         variant: "destructive",
       });
@@ -51,20 +51,23 @@ export default function HomePage() {
     <div className="min-h-screen">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">RentalMatch</h1>
+          <div className="flex items-center gap-2">
+            <Home className="h-6 w-6" />
+            <h1 className="text-2xl font-bold">RentalMatch</h1>
+          </div>
           <div className="flex items-center gap-4">
             <Link href="/dashboard">
-              <Button variant="outline">Dashboard</Button>
+              <Button variant="outline">Tableau de bord</Button>
             </Link>
             <Button
-              variant="ghost"
+              variant="destructive"
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
             >
               {logoutMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "Logout"
+                "Déconnexion"
               )}
             </Button>
           </div>
@@ -72,9 +75,9 @@ export default function HomePage() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {!user.isLandlord && (
+        {!user?.isLandlord && (
           <div className="max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6">Create a Rental Request</h2>
+            <h2 className="text-2xl font-bold mb-6">Créer une demande de location</h2>
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit((data) =>
@@ -87,9 +90,9 @@ export default function HomePage() {
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location</FormLabel>
+                      <FormLabel>Localisation</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter your desired location" {...field} />
+                        <Input placeholder="Entrez votre localisation souhaitée" {...field} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -100,7 +103,7 @@ export default function HomePage() {
                   name="maxDistance"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Maximum Distance (km)</FormLabel>
+                      <FormLabel>Distance maximale (km)</FormLabel>
                       <FormControl>
                         <Input type="number" {...field} />
                       </FormControl>
@@ -113,7 +116,7 @@ export default function HomePage() {
                   name="peopleCount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Number of People</FormLabel>
+                      <FormLabel>Nombre de personnes</FormLabel>
                       <FormControl>
                         <Input type="number" {...field} />
                       </FormControl>
@@ -126,7 +129,7 @@ export default function HomePage() {
                   name="maxBudget"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Maximum Budget ($)</FormLabel>
+                      <FormLabel>Budget maximum (€)</FormLabel>
                       <FormControl>
                         <Input type="number" {...field} />
                       </FormControl>
@@ -142,7 +145,7 @@ export default function HomePage() {
                   {createRequestMutation.isPending && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  Submit Request
+                  Soumettre la demande
                 </Button>
               </form>
             </Form>

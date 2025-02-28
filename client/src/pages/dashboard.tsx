@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2 } from "lucide-react";
+import { Loader2, Home } from "lucide-react";
 import { useState } from "react";
+import { Link } from "wouter";
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, logoutMutation } = useAuth();
   const { toast } = useToast();
   const [selectedRequest, setSelectedRequest] = useState<number | null>(null);
 
@@ -33,13 +34,13 @@ export default function Dashboard() {
         queryKey: ["/api/property-offers", selectedRequest],
       });
       toast({
-        title: "Success",
-        description: "Your offer has been submitted.",
+        title: "Succès",
+        description: "Votre offre a été soumise.",
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
+        title: "Erreur",
         description: error.message,
         variant: "destructive",
       });
@@ -66,94 +67,122 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">
-        {user.isLandlord ? "Available Requests" : "Your Requests"}
-      </h1>
-
-      <div className="grid md:grid-cols-2 gap-6">
-        <div>
-          {rentalRequests?.map((request: any) => (
-            <Card
-              key={request.id}
-              className={`mb-4 ${
-                selectedRequest === request.id ? "border-primary" : ""
-              }`}
-            >
-              <CardHeader>
-                <CardTitle>Request #{request.id}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <p>Location: {request.location}</p>
-                  <p>Max Distance: {request.maxDistance}km</p>
-                  <p>People: {request.peopleCount}</p>
-                  <p>Budget: ${request.maxBudget}</p>
-                  {user.isLandlord && (
-                    <form
-                      onSubmit={(e) => handleSubmitOffer(request.id, e)}
-                      className="mt-4 space-y-4"
-                    >
-                      <div>
-                        <Input
-                          name="price"
-                          type="number"
-                          placeholder="Your price"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Textarea
-                          name="description"
-                          placeholder="Describe your property"
-                          required
-                        />
-                      </div>
-                      <Button
-                        type="submit"
-                        disabled={createOfferMutation.isPending}
-                      >
-                        {createOfferMutation.isPending && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        Submit Offer
-                      </Button>
-                    </form>
-                  )}
-                  {!user.isLandlord && (
-                    <Button
-                      onClick={() => setSelectedRequest(request.id)}
-                      variant="secondary"
-                    >
-                      View Offers
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {selectedRequest && !user.isLandlord && (
-          <div>
-            <h2 className="text-xl font-bold mb-4">Offers</h2>
-            {isLoadingOffers ? (
-              <Loader2 className="h-8 w-8 animate-spin" />
-            ) : (
-              propertyOffers?.map((offer: any) => (
-                <Card key={offer.id} className="mb-4">
-                  <CardHeader>
-                    <CardTitle>${offer.price}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p>{offer.description}</p>
-                  </CardContent>
-                </Card>
-              ))
-            )}
+    <div className="min-h-screen">
+      <header className="border-b">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Link href="/">
+              <Button variant="ghost" className="flex items-center gap-2">
+                <Home className="h-6 w-6" />
+                <span className="font-bold">RentalMatch</span>
+              </Button>
+            </Link>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="destructive"
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+            >
+              {logoutMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Déconnexion"
+              )}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-6">
+          {user?.isLandlord ? "Demandes disponibles" : "Vos demandes"}
+        </h1>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            {rentalRequests?.map((request: any) => (
+              <Card
+                key={request.id}
+                className={`mb-4 ${
+                  selectedRequest === request.id ? "border-primary" : ""
+                }`}
+              >
+                <CardHeader>
+                  <CardTitle>Demande #{request.id}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <p>Localisation : {request.location}</p>
+                    <p>Distance max : {request.maxDistance}km</p>
+                    <p>Personnes : {request.peopleCount}</p>
+                    <p>Budget : {request.maxBudget}€</p>
+                    {user?.isLandlord && (
+                      <form
+                        onSubmit={(e) => handleSubmitOffer(request.id, e)}
+                        className="mt-4 space-y-4"
+                      >
+                        <div>
+                          <Input
+                            name="price"
+                            type="number"
+                            placeholder="Votre prix"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Textarea
+                            name="description"
+                            placeholder="Décrivez votre propriété"
+                            required
+                          />
+                        </div>
+                        <Button
+                          type="submit"
+                          disabled={createOfferMutation.isPending}
+                        >
+                          {createOfferMutation.isPending && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          Soumettre l'offre
+                        </Button>
+                      </form>
+                    )}
+                    {!user?.isLandlord && (
+                      <Button
+                        onClick={() => setSelectedRequest(request.id)}
+                        variant="secondary"
+                      >
+                        Voir les offres
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {selectedRequest && !user?.isLandlord && (
+            <div>
+              <h2 className="text-xl font-bold mb-4">Offres</h2>
+              {isLoadingOffers ? (
+                <Loader2 className="h-8 w-8 animate-spin" />
+              ) : (
+                propertyOffers?.map((offer: any) => (
+                  <Card key={offer.id} className="mb-4">
+                    <CardHeader>
+                      <CardTitle>{offer.price}€</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p>{offer.description}</p>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
