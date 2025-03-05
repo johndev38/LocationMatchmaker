@@ -75,6 +75,9 @@ export default function HomePage() {
             <Link href="/dashboard">
               <Button variant="outline">Tableau de bord</Button>
             </Link>
+            <Link href="/create-request">
+              <Button variant="primary">Créer une Demande</Button>
+            </Link>
             <Button
               variant="destructive"
               onClick={() => logoutMutation.mutate()}
