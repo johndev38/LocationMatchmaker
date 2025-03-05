@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { insertUserSchema, type InsertUser } from "@shared/schema";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Redirect } from "wouter";
 import { Building2, Home, Loader2 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -30,6 +32,22 @@ export default function AuthPage() {
       password: "",
       isLandlord: false,
     },
+  });
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await apiRequest("GET", "/api/check-auth");
+        const data = await res.json();
+        if (data.authenticated) {
+          console.log("User is authenticated");
+        }
+      } catch (error) {
+        console.error("Failed to check auth", error);
+      }
+    }
+
+    checkAuth();
   });
 
   if (user) {

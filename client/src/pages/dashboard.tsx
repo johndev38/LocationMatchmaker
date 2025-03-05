@@ -9,6 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, Home, Mountain, Waves, Building2, Trees, Warehouse, Leaf, Droplets } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import { GoogleMap, LoadScript, Marker, Circle } from '@react-google-maps/api';
 
 const locationTypeIcons = {
   ville: <Building2 className="h-4 w-4" />,
@@ -19,6 +20,34 @@ const locationTypeIcons = {
   forêt: <Leaf className="h-4 w-4" />,
   lac: <Droplets className="h-4 w-4" />,
 };
+
+const mapContainerStyle = {
+  height: '500px',
+  width: '100%',
+};
+
+const MapWithCircle: React.FC<{ coordinates: { lat: number; lng: number }; maxDistance: number; departureCity: string }> = ({ coordinates, maxDistance, departureCity }) => (
+  <LoadScript googleMapsApiKey="AIzaSyB7ozOJkSl78CMvhM47gs4ASaUsaFG3hB8">
+    <GoogleMap
+      mapContainerStyle={mapContainerStyle}
+      center={coordinates}
+      zoom={7}
+    >
+      <Marker position={coordinates} label={departureCity} />
+      <Circle
+        center={coordinates}
+        radius={maxDistance * 1000} // Convertir la distance en mètres
+        options={{
+          strokeColor: '#0080ff',
+          strokeOpacity: 0.8,
+          strokeWeight: 2,
+          fillColor: '#0080ff',
+          fillOpacity: 0.35,
+        }}
+      />
+    </GoogleMap>
+  </LoadScript>
+);
 
 export default function Dashboard() {
   const { user, logoutMutation } = useAuth();
@@ -76,6 +105,9 @@ export default function Dashboard() {
     );
   }
 
+  const coordinates = { lat: 48.8566, lng: 2.3522 }; // Exemple pour Paris
+  const maxDistance = 100; // Exemple de distance maximale
+
   return (
     <div className="min-h-screen">
       <header className="border-b">
@@ -108,6 +140,8 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold mb-6">
           {user?.isLandlord ? "Demandes disponibles" : "Vos demandes"}
         </h1>
+
+        <MapWithCircle coordinates={coordinates} maxDistance={maxDistance} departureCity="Paris" />
 
         <div className="grid md:grid-cols-2 gap-6">
           <div>

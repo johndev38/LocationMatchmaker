@@ -6,6 +6,10 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import dotenv from 'dotenv';
+
+dotenv.config();
+
 
 declare global {
   namespace Express {
@@ -77,6 +81,9 @@ export function setupAuth(app: Express) {
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
     res.status(200).json(req.user);
+  });
+  app.get("/api/check-auth", (req, res) => {
+    res.status(200).json({ authenticated: req.isAuthenticated() });
   });
 
   app.post("/api/logout", (req, res, next) => {
