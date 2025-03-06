@@ -97,6 +97,7 @@
     "@types/passport": "^1.0.16",
     "@types/passport-local": "^1.0.38",
     "@types/react": "^18.3.11",
+    "@types/react-date-range": "^1.4.10",
     "@types/react-dom": "^18.3.1",
     "@types/react-flatpickr": "^3.8.11",
     "@types/ws": "^8.5.13",

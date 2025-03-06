@@ -359,7 +359,7 @@ export default function CreateRentalRequest() {
                         onMouseDown={(e) => {
                           // Effet léger de clic
                           (e.currentTarget.style.transform =
-                            buttonActiveStyle.transform);
+                            buttonActiveStyle.transform || "");
                         }}
                         onMouseUp={(e) => {
                           (e.currentTarget.style.transform = "scale(1)");
@@ -418,7 +418,7 @@ export default function CreateRentalRequest() {
             disabled={createRequestMutation.isPending}
             onMouseDown={(e) => {
               (e.currentTarget.style.transform =
-                buttonActiveStyle.transform);
+                buttonActiveStyle.transform || "");
             }}
             onMouseUp={(e) => {
               (e.currentTarget.style.transform = "scale(1)");
