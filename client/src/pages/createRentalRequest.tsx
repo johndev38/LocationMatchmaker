@@ -12,7 +12,10 @@ import { useEffect, useRef, useState } from "react";
 import { Library } from '@googlemaps/js-api-loader';
 import { useJsApiLoader, GoogleMap, Marker, Circle, Autocomplete } from "@react-google-maps/api";
 import { Slider } from "@/components/ui/slider";
-
+import { DateRange } from "react-date-range";
+import "react-date-range/dist/styles.css";
+import "react-date-range/dist/theme/default.css";
+import GuestSelector from "@/lib/GuestSelector";
 const locationTypeIcons = {
   ville: <Building2 className="h-6 w-6" />,
   montagne: <Mountain className="h-6 w-6" />,
@@ -35,8 +38,11 @@ export default function CreateRentalRequest() {
   const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
   const [circleRadius, setCircleRadius] = useState(100 * 1000); // Par défaut 100 km
   const mapRef = useRef<google.maps.Map | null>(null); // Référence pour la carte
-
-  
+  const [dateRange, setDateRange] = useState({
+    startDate: new Date(),
+    endDate: new Date(),
+    key: "selection",
+  });
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
     //googleMapsApiKey: "AIzaSyB7ozOJkSl78CMvhM47gs4ASaUsaFG3hB8", clé restreinte
@@ -102,7 +108,7 @@ export default function CreateRentalRequest() {
       const place = autocomplete.getPlace();
       if (place.geometry) {
         const location = place.geometry.location;
-        setCoordinates({ lat: location.lat(), lng: location.lng() });
+        setCoordinates({ lat: location?.lat() || 0, lng: location?.lng() || 0 });
         form.setValue("departureCity", place.formatted_address || "");
       } else {
         toast({
@@ -124,7 +130,20 @@ export default function CreateRentalRequest() {
           )}
           className="space-y-4"
         >
+          <FormItem>
+            <div>
+            <FormLabel>Période de location</FormLabel>
+            </div>
+            <DateRange
+              ranges={[dateRange]}
+              onChange={(ranges: any) => setDateRange(ranges.selection)}
+              moveRangeOnFirstSelection={false}
+              rangeColors={["#3b82f6"]}
+              className="w-64"
+            />
+          </FormItem>
              <FormField control={form.control} name="departureCity" render={({ field }) => (
+              
             <FormItem>
               <FormLabel>Ville de départ</FormLabel>
               <FormControl>
@@ -157,7 +176,9 @@ export default function CreateRentalRequest() {
             mapContainerStyle={mapContainerStyle}
             center={coordinates}
             zoom={10}
-            onLoad={(map) => (mapRef.current = map)} // Stocke la référence de la carte
+            onLoad={(map) => {
+              mapRef.current = map;
+            }}
           >
             <Marker position={coordinates} />
             <Circle
@@ -192,7 +213,7 @@ export default function CreateRentalRequest() {
                           ? selectedTypes.filter((t) => t !== type)
                           : [...selectedTypes, type];
                         setSelectedTypes(newTypes);
-                        form.setValue("locationType", newTypes);
+                        form.setValue("locationType", newTypes as never);
                       }}
                     >
                       {locationTypeIcons[type as keyof typeof locationTypeIcons]}
@@ -208,21 +229,8 @@ export default function CreateRentalRequest() {
               </FormItem>
             )}
           />
+          <GuestSelector />
 
-
-
-          <FormField
-            control={form.control}
-            name="peopleCount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nombre de personnes</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
 
           <FormField
             control={form.control}
@@ -236,6 +244,8 @@ export default function CreateRentalRequest() {
               </FormItem>
             )}
           />
+
+        
 
           <Button
             type="submit"
