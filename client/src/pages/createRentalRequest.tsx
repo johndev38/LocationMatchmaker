@@ -3,12 +3,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertRentalRequestSchema, locationTypes } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, Building2, Mountain, Waves, Trees, Warehouse, Leaf, Droplets } from "lucide-react";
 import { useState } from "react";
+import { Library } from '@googlemaps/js-api-loader';
+import { useJsApiLoader, GoogleMap, Marker, Circle, Autocomplete } from "@react-google-maps/api";
 
 const locationTypeIcons = {
   ville: <Building2 className="h-6 w-6" />,
@@ -20,9 +22,24 @@ const locationTypeIcons = {
   lac: <Droplets className="h-6 w-6" />,
 };
 
+const mapContainerStyle = {
+  height: '400px',
+  width: '100%',
+};
+const libraries: Library[] = ['places'];
 export default function CreateRentalRequest() {
   const { toast } = useToast();
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [coordinates, setCoordinates] = useState({ lat: 48.8566, lng: 2.3522 });
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
+    //googleMapsApiKey: "AIzaSyB7ozOJkSl78CMvhM47gs4ASaUsaFG3hB8", clé restreinte
+    libraries
+  });
+
+ 
 
   const form = useForm({
     resolver: zodResolver(insertRentalRequestSchema),
@@ -59,6 +76,46 @@ export default function CreateRentalRequest() {
     },
   });
 
+  const handleAddressChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const address = event.target.value;
+    form.setValue("location", address);
+
+    // Utiliser l'API de géocodage pour obtenir les coordonnées
+    if (address) {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address }, (results, status) => {
+        if (status === "OK" && results[0]) {
+          const location = results[0].geometry.location;
+          setCoordinates({ lat: location.lat(), lng: location.lng() });
+        } else {
+          toast({
+            title: "Erreur",
+            description: "Impossible de trouver l'adresse.",
+            variant: "destructive",
+          });
+        }
+      });
+    }
+  };
+  const handlePlaceChanged = () => {
+    console.log(autocomplete)
+    if (autocomplete) {
+        console.log(autocomplete)
+      const place = autocomplete.getPlace();
+      if (place.geometry) {
+        const location = place.geometry.location;
+        setCoordinates({ lat: location.lat(), lng: location.lng() });
+        form.setValue("departureCity", place.formatted_address || "");
+      } else {
+        toast({
+          title: "Erreur",
+          description: "Impossible de trouver l'adresse.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h2 className="text-2xl font-bold mb-6">Créer une demande de location</h2>
@@ -69,31 +126,50 @@ export default function CreateRentalRequest() {
           )}
           className="space-y-4"
         >
+             <FormField control={form.control} name="departureCity" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Ville de départ</FormLabel>
+              <FormControl>
+                {isLoaded && (
+                  <Autocomplete onLoad={setAutocomplete} onPlaceChanged={handlePlaceChanged}>
+                    <Input placeholder="Entrez votre ville de départ" {...field} />
+                  </Autocomplete>
+                )}
+              </FormControl>
+            </FormItem>
+          )} />
           <FormField
             control={form.control}
-            name="departureCity"
+            name="maxDistance"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Ville de départ</FormLabel>
+                <FormLabel>Distance maximale (km)</FormLabel>
                 <FormControl>
-                  <Input placeholder="Entrez votre ville de départ" {...field} />
+                  <Input type="number" {...field} />
                 </FormControl>
               </FormItem>
             )}
           />
-
-          <FormField
-            control={form.control}
-            name="location"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Destination</FormLabel>
-                <FormControl>
-                  <Input placeholder="Entrez votre destination souhaitée" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
+{isLoaded && (
+        <GoogleMap
+          mapContainerStyle={mapContainerStyle}
+          center={coordinates}
+          zoom={10}
+        >
+          <Marker position={coordinates} />
+          <Circle
+            center={coordinates}
+            radius={form.getValues("maxDistance") * 1000} // Convertir la distance en mètres
+            options={{
+              strokeColor: '#0080ff',
+              strokeOpacity: 0.8,
+              strokeWeight: 2,
+              fillColor: '#0080ff',
+              fillOpacity: 0.35,
+            }}
           />
+        </GoogleMap>
+      )}
 
           <FormField
             control={form.control}
@@ -130,18 +206,7 @@ export default function CreateRentalRequest() {
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="maxDistance"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Distance maximale (km)</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+
 
           <FormField
             control={form.control}
@@ -181,6 +246,6 @@ export default function CreateRentalRequest() {
           </Button>
         </form>
       </Form>
-    </div>
+      </div>
   );
 }
