@@ -50,13 +50,15 @@ export class DatabaseStorage implements IStorage {
     const [rentalRequest] = await db
       .insert(rentalRequests)
       .values({
-        ...request,
-        userId,
+        userId: userId,
         status: "active",
+        adults: request.adults,
+        children: request.children,
+        babies: request.babies,
+        pets: request.pets,
         departureCity: request.departureCity,
         locationType: request.locationType,
         maxDistance: request.maxDistance,
-        peopleCount: request.peopleCount,
         maxBudget: request.maxBudget,
         startDate: request.startDate,
         endDate: request.endDate,
@@ -66,7 +68,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRentalRequests(): Promise<RentalRequest[]> {
-    return await db.select().from(rentalRequests);
+    const requests = await db.select().from(rentalRequests);
+    return requests.map(request => ({
+      ...request,
+      guests: {
+        adults: request.adults,
+        children: request.children,
+        pets: request.pets,
+      },
+    }));
   }
 
   async createPropertyOffer(

@@ -149,7 +149,7 @@ export default function CreateRentalRequest() {
       departureCity: "",
       locationType: [],
       maxDistance: 100,
-      peopleCount: 1,
+      guests: 1,
       maxBudget: 1000,
       startDate: new Date(),
       endDate: new Date(),
@@ -189,7 +189,6 @@ export default function CreateRentalRequest() {
 
   // Met à jour le rayon du cercle quand la distance change
   useEffect(() => {
-    console.log('Distance maximale mise à jour:', form.getValues("maxDistance"));
     const distance = form.getValues("maxDistance") * 1000;
     setCircleRadius(distance);
 
@@ -450,8 +449,17 @@ export default function CreateRentalRequest() {
             )}
           />
 
-          {/* Guest Selector */}
-          <GuestSelector />
+          <FormField
+            control={form.control}
+            name="guests"
+            render={() => (
+              <FormItem>
+                <FormLabel>Nombre de voyageurs</FormLabel>
+                <GuestSelector control={form.control} name="guests" />
+              </FormItem>
+            )}
+          />
+
 
           <FormField
             control={form.control}

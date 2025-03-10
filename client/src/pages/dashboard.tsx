@@ -50,7 +50,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-gray-600">Budget : <span className="font-semibold">{request.maxBudget}€</span></p>
-                  <p className="text-gray-600">Personnes : <span className="font-semibold">{request.peopleCount}</span></p>
+                  <p className="text-gray-600">Personnes : <span className="font-semibold">{request.guests}</span></p>
                 </CardContent>
               </Card>
             ))

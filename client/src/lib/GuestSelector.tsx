@@ -1,21 +1,24 @@
-import { useState } from "react";
+import { useController } from "react-hook-form";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus } from "lucide-react";
 
-export default function GuestSelector() {
-  const [guests, setGuests] = useState({
-    adults: 0,
-    children: 0,
-    babies: 0,
-    pets: 0,
+export default function GuestSelector({ control, name }: { control: any; name: string }) {
+  const { field } = useController({
+    control,
+    name,
+    defaultValue: { adults: 0, children: 0, babies: 0, pets: 0 },
   });
 
+  const guests = field.value ?? { adults: 0, children: 0, babies: 0, pets: 0 };
+
   const updateCount = (type: keyof typeof guests, value: number) => {
-    setGuests((prev) => ({
-      ...prev,
-      [type]: Math.max(0, prev[type] + value),
-    }));
+    const newValue = Math.max(0, (guests[type] || 0) + value);
+    
+    field.onChange({
+      ...guests,
+      [type]: newValue,
+    }, { shouldValidate: false });
   };
 
   return (
@@ -43,11 +46,13 @@ export default function GuestSelector() {
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => updateCount(key as keyof typeof guests, -1)}
-                disabled={guests[key as keyof typeof guests] === 0}
+                disabled={(guests[key as keyof typeof guests] || 0) === 0}
               >
                 <Minus className="h-4 w-4" />
               </Button>
-              <span className="w-6 text-center">{guests[key as keyof typeof guests]}</span>
+              <span className="w-6 text-center">
+                {Number.isNaN(guests[key as keyof typeof guests]) ? "0" : guests[key as keyof typeof guests]}
+              </span>
               <Button
                 variant="outline"
                 size="icon"
