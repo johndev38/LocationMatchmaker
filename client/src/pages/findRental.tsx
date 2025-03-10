@@ -1,18 +1,19 @@
-import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import Header from "./header"; // ✅ Import du Header
 
-export default function Dashboard() {
-  const { user, logoutMutation } = useAuth();
+export default function FindRental() {
   const [selectedRequest, setSelectedRequest] = useState<number | null>(null);
 
   const { data: rentalRequests = [], isLoading: loadingRequests } = useQuery<any[]>({
     queryKey: ["rentalRequests"],
+    queryFn: async () => {
+      const response = await fetch("/api/rental-requests");
+      if (!response.ok) throw new Error("Erreur lors de la récupération des demandes de location");
+      return response.json();
+    },
   });
 
   const { data: propertyOffers = [], isLoading: loadingOffers } = useQuery<any[]>({

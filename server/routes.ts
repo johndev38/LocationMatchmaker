@@ -9,12 +9,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/rental-requests", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
     try {
-      const validatedData = insertRentalRequestSchema.parse(req.body);
-      const request = await storage.createRentalRequest(req.user!.id, validatedData);
+      // Convertir les chaînes de caractères en objets Date
+      const requestData = {
+        ...req.body,
+        startDate: new Date(req.body.startDate),
+        endDate: new Date(req.body.endDate),
+      };
+
+      const validatedData = insertRentalRequestSchema.parse(requestData);
+
+      // Convertir les dates en chaînes de caractères avant de les stocker
+      const request = await storage.createRentalRequest(req.user!.id, {
+        ...validatedData,
+        startDate: validatedData.startDate.toISOString(),
+        endDate: validatedData.endDate.toISOString(),
+      });
+
+      console.log("request", request);
       res.status(201).json(request);
     } catch (error) {
+      console.error("Error creating rental request:", error);
       res.status(400).json({ error: "Invalid request data" });
     }
   });
@@ -64,6 +79,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const messages = await storage.getMessages(req.user!.id);
     res.json(messages);
+  });
+
+  app.get("/api/my-listings", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const listings = await storage.getUserListings(req.user!.id);
+      res.json(listings);
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la récupération des annonces" });
+    }
   });
 
   const httpServer = createServer(app);

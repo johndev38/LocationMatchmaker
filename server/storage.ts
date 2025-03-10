@@ -53,6 +53,13 @@ export class DatabaseStorage implements IStorage {
         ...request,
         userId,
         status: "active",
+        departureCity: request.departureCity,
+        locationType: request.locationType,
+        maxDistance: request.maxDistance,
+        peopleCount: request.peopleCount,
+        maxBudget: request.maxBudget,
+        startDate: request.startDate,
+        endDate: request.endDate,
       })
       .returning();
     return rentalRequest;
@@ -104,6 +111,19 @@ export class DatabaseStorage implements IStorage {
       .where(
         eq(messages.senderId, userId) || eq(messages.receiverId, userId)
       );
+  }
+
+  async getUserListings(userId: number): Promise<RentalRequest[]> {
+    return await db
+      .select()
+      .from(rentalRequests)
+      .where(eq(rentalRequests.userId, userId));
+  }
+
+  async deleteRentalRequest(requestId: number, userId: number): Promise<void> {
+    await db
+      .delete(rentalRequests)
+      .where(eq(rentalRequests.id, requestId) && eq(rentalRequests.userId, userId));
   }
 }
 

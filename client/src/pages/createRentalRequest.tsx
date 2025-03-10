@@ -40,10 +40,12 @@ import { DateRange } from "react-date-range";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
 import GuestSelector from "@/lib/GuestSelector";
+import { useNavigate } from "react-router-dom";
+import Header from "./header";
 
 /* 
   🔹 Couleurs, typographie et spacing inspirés d'Airbnb
-  - Couleurs dominantes : tons "pastel" ou "soft" (ex: #FF385C pour l'accent), 
+  - Couleurs dominantes : tons "pastel" ou "soft" (ex: #FF385C pour l'accent),
     gris foncé (#484848), gris moyen (#717171), gris clair (#f7f7f7).
   - Typographie sobre, arrondie, avec du whitespace généreux.
   - Animations de hover/focus subtiles sur les boutons et cartes.
@@ -97,6 +99,8 @@ const buttonActiveStyle: React.CSSProperties = {
   transform: "scale(0.98)",
 };
 
+
+
 const locationTypeIcons = {
   ville: <Building2 className="h-6 w-6" />,
   montagne: <Mountain className="h-6 w-6" />,
@@ -118,6 +122,7 @@ const mapContainerStyle = {
 const libraries: Library[] = ["places"];
 
 export default function CreateRentalRequest() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [coordinates, setCoordinates] = useState({
@@ -133,7 +138,6 @@ export default function CreateRentalRequest() {
     endDate: new Date(),
     key: "selection",
   });
-
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
     libraries,
@@ -143,22 +147,27 @@ export default function CreateRentalRequest() {
     resolver: zodResolver(insertRentalRequestSchema),
     defaultValues: {
       departureCity: "",
-      location: "",
       locationType: [],
       maxDistance: 100,
       peopleCount: 1,
       maxBudget: 1000,
+      startDate: new Date(),
+      endDate: new Date(),
     },
   });
 
   const createRequestMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log("data", data);
       const res = await apiRequest("POST", "/api/rental-requests", data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["/api/rental-requests"],
+        queryKey: ['rentalRequests'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['propertyOffers'],
       });
       toast({
         title: "Succès",
@@ -166,8 +175,10 @@ export default function CreateRentalRequest() {
       });
       form.reset();
       setSelectedTypes([]);
+      navigate("/");
     },
     onError: (error: Error) => {
+      console.error('Erreur lors de la création de la demande:', error);
       toast({
         title: "Erreur",
         description: error.message,
@@ -178,6 +189,7 @@ export default function CreateRentalRequest() {
 
   // Met à jour le rayon du cercle quand la distance change
   useEffect(() => {
+    console.log('Distance maximale mise à jour:', form.getValues("maxDistance"));
     const distance = form.getValues("maxDistance") * 1000;
     setCircleRadius(distance);
 
@@ -200,6 +212,7 @@ export default function CreateRentalRequest() {
   const handlePlaceChanged = () => {
     if (autocomplete) {
       const place = autocomplete.getPlace();
+      console.log('Lieu sélectionné:', place);
       if (place.geometry) {
         const location = place.geometry.location;
         setCoordinates({
@@ -208,6 +221,7 @@ export default function CreateRentalRequest() {
         });
         form.setValue("departureCity", place.formatted_address || "");
       } else {
+        console.error('Erreur: Impossible de trouver l\'adresse.');
         toast({
           title: "Erreur",
           description: "Impossible de trouver l'adresse.",
@@ -217,24 +231,72 @@ export default function CreateRentalRequest() {
     }
   };
 
+  // Calculer si le formulaire est valide
+  const isFormValid = form.formState.isValid && selectedTypes.length > 0;
+
+  // Fonction pour vérifier les champs manquants
+  const getMissingFields = () => {
+    console.log("form.formState.isValid", form.formState.isValid);
+    console.log("selectedTypes", selectedTypes);
+    const errors = form.formState.errors;
+    const missingFields = [];
+    if (!form.getValues('departureCity')) missingFields.push('Ville de départ');
+    if (!form.getValues('maxDistance')) missingFields.push('Distance maximale');
+    if (!form.getValues('maxBudget')) missingFields.push('Budget maximum');
+    if (selectedTypes.length === 0) missingFields.push('Types de destination');
+    return missingFields;
+  };
+
+  // Afficher les champs manquants
+  useEffect(() => {
+    const missingFields = getMissingFields();
+    if (missingFields.length > 0) {
+      console.warn('Champs manquants ou invalides:', missingFields.join(', '));
+    }
+  }, [form.formState.isValid, selectedTypes]);
+
+  // Afficher toutes les valeurs du formulaire et les erreurs à chaque modification
+  useEffect(() => {
+    const subscription = form.watch((values) => {
+      console.log('Valeurs actuelles du formulaire:', values);
+      console.log('Erreurs de validation:', form.formState.errors);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  const handleSubmitForm = (data: any) => {
+    if (!isFormValid) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez remplir tous les champs obligatoires.",
+        variant: "destructive",
+      });
+      return;
+    }
+  
+    createRequestMutation.mutate({
+      ...data,
+      locationType: selectedTypes,
+    });
+  };
+
   return (
+    <div>
+    <Header /> 
     <div style={containerStyle}>
+    <div className="pt-20">
       <h2 style={headingStyle}>Créer une demande de location</h2>
       <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit((data) =>
-            createRequestMutation.mutate({
-              ...data,
-              locationType: selectedTypes,
-            })
-          )}
-          className="space-y-6"
-        >
+      <form onSubmit={form.handleSubmit(handleSubmitForm)}>
           <FormItem>
             <div style={subheadingStyle}>Période de location</div>
             <DateRange
               ranges={[dateRange]}
-              onChange={(ranges: any) => setDateRange(ranges.selection)}
+              onChange={(ranges: any) => {
+                setDateRange(ranges.selection);
+                form.setValue('startDate', ranges.selection.startDate);
+                form.setValue('endDate', ranges.selection.endDate);
+              }}
               moveRangeOnFirstSelection={false}
               rangeColors={["#FF385C"]} // Couleur Airbnb
               className="w-full rounded-md shadow-sm"
@@ -309,7 +371,6 @@ export default function CreateRentalRequest() {
                   strokeColor: "#FF385C",
                   strokeOpacity: 0.8,
                   strokeWeight: 2,
-                  fillColor: "#FF385C",
                   fillOpacity: 0.15, // plus léger pour être moins agressif
                 }}
               />
@@ -404,6 +465,7 @@ export default function CreateRentalRequest() {
                   <Input
                     type="number"
                     {...field}
+                    onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
                     className="border-gray-300 rounded-md focus:ring-2 focus:ring-pink-200 transition duration-150"
                   />
                 </FormControl>
@@ -411,29 +473,31 @@ export default function CreateRentalRequest() {
             )}
           />
 
-          <Button
-            type="submit"
-            className="w-full py-3 mt-4 text-lg rounded-md font-semibold transition duration-150"
-            style={buttonPrimaryStyle}
-            disabled={createRequestMutation.isPending}
-            onMouseDown={(e) => {
-              (e.currentTarget.style.transform =
-                buttonActiveStyle.transform || "");
-            }}
-            onMouseUp={(e) => {
-              (e.currentTarget.style.transform = "scale(1)");
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget.style.transform = "scale(1)");
-            }}
-          >
-            {createRequestMutation.isPending && (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            )}
-            Soumettre la demande
-          </Button>
+<Button
+      type="submit" // Assurez-vous que le type est bien "submit"
+      className="w-full py-3 mt-4 text-lg rounded-md font-semibold transition duration-150"
+      style={buttonPrimaryStyle}
+      disabled={!isFormValid || createRequestMutation.isPending}
+      onMouseDown={(e) => {
+        (e.currentTarget.style.transform =
+          buttonActiveStyle.transform || "");
+      }}
+      onMouseUp={(e) => {
+        (e.currentTarget.style.transform = "scale(1)");
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget.style.transform = "scale(1)");
+      }}
+    >
+      {createRequestMutation.isPending && (
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+      )}
+      Soumettre la demande
+    </Button>
         </form>
       </Form>
+    </div>
+    </div>
     </div>
   );
 }

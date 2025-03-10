@@ -13,11 +13,12 @@ export const rentalRequests = pgTable("rental_requests", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   departureCity: text("departure_city").notNull(),
-  location: text("location").notNull(),
   locationType: text("location_type").array().notNull(),
   maxDistance: integer("max_distance").notNull(),
   peopleCount: integer("people_count").notNull(),
   maxBudget: integer("max_budget").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
   status: text("status").notNull().default("active"),
 });
 
@@ -62,6 +63,13 @@ export const insertRentalRequestSchema = createInsertSchema(rentalRequests)
   })
   .extend({
     locationType: z.array(z.enum(locationTypes)).min(1, "Sélectionnez au moins un type de destination"),
+    departureCity: z.string().nonempty("La ville de départ est requise"),
+    maxDistance: z.number().min(1, "La distance maximale doit être supérieure à 0"),
+    peopleCount: z.number().min(1, "Le nombre de personnes doit être au moins 1"),
+    maxBudget: z.number().min(1, "Le budget maximum doit être supérieur à 0"),
+   // startDate: z.date().refine(date => date >= new Date(), "La date de début doit être dans le futur"),
+    startDate: z.date(),
+    endDate: z.date().refine(date => date >= new Date(), "La date de fin doit être dans le futur"),
   });
 
 export const insertPropertyOfferSchema = createInsertSchema(propertyOffers).omit({
