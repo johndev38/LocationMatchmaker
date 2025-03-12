@@ -25,6 +25,8 @@ import {
   Warehouse,
   Leaf,
   Droplets,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Library } from "@googlemaps/js-api-loader";
@@ -39,9 +41,10 @@ import { Slider } from "@/components/ui/slider";
 import { DateRange } from "react-date-range";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
-import GuestSelector from "@/lib/GuestSelector";
 import { useNavigate } from "react-router-dom";
 import Header from "./header";
+import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
+import GuestSelector from "@/lib/GuestSelector";
 
 /* 
   🔹 Couleurs, typographie et spacing inspirés d'Airbnb
@@ -99,8 +102,6 @@ const buttonActiveStyle: React.CSSProperties = {
   transform: "scale(0.98)",
 };
 
-
-
 const locationTypeIcons = {
   ville: <Building2 className="h-6 w-6" />,
   montagne: <Mountain className="h-6 w-6" />,
@@ -149,12 +150,18 @@ export default function CreateRentalRequest() {
       departureCity: "",
       locationType: [],
       maxDistance: 100,
-      guests: 1,
+      adults: 1,
+      children: 0,
+      babies: 0,
+      pets: 0,
       maxBudget: 1000,
       startDate: new Date(),
       endDate: new Date(),
     },
   });
+
+  // Pour suivre les valeurs des invités et mettre à jour le récapitulatif
+  const { adults, children, babies, pets } = form.watch();
 
   const createRequestMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -164,10 +171,10 @@ export default function CreateRentalRequest() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['rentalRequests'],
+        queryKey: ["rentalRequests"],
       });
       queryClient.invalidateQueries({
-        queryKey: ['propertyOffers'],
+        queryKey: ["propertyOffers"],
       });
       toast({
         title: "Succès",
@@ -178,7 +185,7 @@ export default function CreateRentalRequest() {
       navigate("/");
     },
     onError: (error: Error) => {
-      console.error('Erreur lors de la création de la demande:', error);
+      console.error("Erreur lors de la création de la demande:", error);
       toast({
         title: "Erreur",
         description: error.message,
@@ -211,7 +218,7 @@ export default function CreateRentalRequest() {
   const handlePlaceChanged = () => {
     if (autocomplete) {
       const place = autocomplete.getPlace();
-      console.log('Lieu sélectionné:', place);
+      console.log("Lieu sélectionné:", place);
       if (place.geometry) {
         const location = place.geometry.location;
         setCoordinates({
@@ -220,7 +227,7 @@ export default function CreateRentalRequest() {
         });
         form.setValue("departureCity", place.formatted_address || "");
       } else {
-        console.error('Erreur: Impossible de trouver l\'adresse.');
+        console.error("Erreur: Impossible de trouver l'adresse.");
         toast({
           title: "Erreur",
           description: "Impossible de trouver l'adresse.",
@@ -233,32 +240,24 @@ export default function CreateRentalRequest() {
   // Calculer si le formulaire est valide
   const isFormValid = form.formState.isValid && selectedTypes.length > 0;
 
-  // Fonction pour vérifier les champs manquants
   const getMissingFields = () => {
     console.log("form.formState.isValid", form.formState.isValid);
     console.log("selectedTypes", selectedTypes);
     const errors = form.formState.errors;
     const missingFields = [];
-    if (!form.getValues('departureCity')) missingFields.push('Ville de départ');
-    if (!form.getValues('maxDistance')) missingFields.push('Distance maximale');
-    if (!form.getValues('maxBudget')) missingFields.push('Budget maximum');
-    if (selectedTypes.length === 0) missingFields.push('Types de destination');
+    if (!form.getValues("departureCity")) missingFields.push("Ville de départ");
+    if (!form.getValues("maxDistance"))
+      missingFields.push("Distance maximale");
+    if (!form.getValues("maxBudget")) missingFields.push("Budget maximum");
+    if (selectedTypes.length === 0)
+      missingFields.push("Types de destination");
     return missingFields;
   };
 
-  // Afficher les champs manquants
-  useEffect(() => {
-    const missingFields = getMissingFields();
-    if (missingFields.length > 0) {
-      console.warn('Champs manquants ou invalides:', missingFields.join(', '));
-    }
-  }, [form.formState.isValid, selectedTypes]);
-
-  // Afficher toutes les valeurs du formulaire et les erreurs à chaque modification
   useEffect(() => {
     const subscription = form.watch((values) => {
-      console.log('Valeurs actuelles du formulaire:', values);
-      console.log('Erreurs de validation:', form.formState.errors);
+      console.log("Valeurs actuelles du formulaire:", values);
+      console.log("Erreurs de validation:", form.formState.errors);
     });
     return () => subscription.unsubscribe();
   }, [form]);
@@ -272,240 +271,249 @@ export default function CreateRentalRequest() {
       });
       return;
     }
-  
+
     createRequestMutation.mutate({
       ...data,
       locationType: selectedTypes,
     });
   };
 
+  const updateCount = (
+    field: "adults" | "children" | "babies" | "pets",
+    value: number
+  ) => {
+    const currentValue = Number(form.getValues(field)) || 0;
+    form.setValue(field, Math.max(0, currentValue + value));
+  };
+
+  // État pour contrôler l'ouverture du Popover pour la sélection des invités
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+
   return (
     <div>
-    <Header /> 
-    <div style={containerStyle}>
-    <div className="pt-20">
-      <h2 style={headingStyle}>Créer une demande de location</h2>
-      <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmitForm)}>
-          <FormItem>
-            <div style={subheadingStyle}>Période de location</div>
-            <DateRange
-              ranges={[dateRange]}
-              onChange={(ranges: any) => {
-                setDateRange(ranges.selection);
-                form.setValue('startDate', ranges.selection.startDate);
-                form.setValue('endDate', ranges.selection.endDate);
-              }}
-              moveRangeOnFirstSelection={false}
-              rangeColors={["#FF385C"]} // Couleur Airbnb
-              className="w-full rounded-md shadow-sm"
-            />
-          </FormItem>
+      <Header />
+      <div style={containerStyle}>
+        <div className="pt-20">
+          <h2 style={headingStyle}>Créer une demande de location</h2>
+          <Form {...form}>
 
-          <FormField
-            control={form.control}
-            name="departureCity"
-            render={({ field }) => (
+
+          <GuestSelector
+                adults={adults}
+                onAdultsChange={(val: number) => form.setValue("adults", val)}
+                children={children}
+                onChildrenChange={(val: number) => form.setValue("children", val)}
+                babies={babies}
+                onBabiesChange={(val: number) => form.setValue("babies", val)}
+                pets={pets}
+                onPetsChange={(val) => form.setValue("pets", val)}
+              />
+
+
+            <form onSubmit={form.handleSubmit(handleSubmitForm)}>
               <FormItem>
-                <FormLabel style={fieldLabelStyle}>
-                  Ville de départ
-                </FormLabel>
-                <FormControl>
-                  {isLoaded && (
-                    <Autocomplete
-                      onLoad={setAutocomplete}
-                      onPlaceChanged={handlePlaceChanged}
-                    >
+                <div style={subheadingStyle}>Période de location</div>
+                <DateRange
+                  ranges={[dateRange]}
+                  onChange={(ranges: any) => {
+                    setDateRange(ranges.selection);
+                    form.setValue("startDate", ranges.selection.startDate);
+                    form.setValue("endDate", ranges.selection.endDate);
+                  }}
+                  moveRangeOnFirstSelection={false}
+                  rangeColors={["#FF385C"]} // Couleur Airbnb
+                  className="w-full rounded-md shadow-sm"
+                />
+              </FormItem>
+
+              <FormField
+                control={form.control}
+                name="departureCity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel style={fieldLabelStyle}>
+                      Ville de départ
+                    </FormLabel>
+                    <FormControl>
+                      {isLoaded && (
+                        <Autocomplete
+                          onLoad={setAutocomplete}
+                          onPlaceChanged={handlePlaceChanged}
+                        >
+                          <Input
+                            placeholder="Entrez votre ville de départ"
+                            {...field}
+                            className="border-gray-300 rounded-md focus:ring-2 focus:ring-pink-200 transition duration-150"
+                          />
+                        </Autocomplete>
+                      )}
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="maxDistance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel style={fieldLabelStyle}>
+                      Distance maximale (km)
+                    </FormLabel>
+                    <FormControl>
+                      <Slider
+                        min={10}
+                        max={500}
+                        step={10}
+                        value={[field.value]}
+                        onValueChange={(val) =>
+                          form.setValue("maxDistance", val[0])
+                        }
+                        className="mt-2"
+                      />
+                    </FormControl>
+                    <p className="text-gray-600">{field.value} km</p>
+                  </FormItem>
+                )}
+              />
+
+              {isLoaded && (
+                <GoogleMap
+                  mapContainerStyle={mapContainerStyle}
+                  center={coordinates}
+                  zoom={10}
+                  onLoad={(map) => {
+                    mapRef.current = map;
+                  }}
+                >
+                  <Marker position={coordinates} />
+                  <Circle
+                    center={coordinates}
+                    radius={circleRadius}
+                    options={{
+                      strokeColor: "#FF385C",
+                      strokeOpacity: 0.8,
+                      strokeWeight: 2,
+                      fillOpacity: 0.15, // plus léger pour être moins agressif
+                    }}
+                  />
+                </GoogleMap>
+              )}
+
+              <FormField
+                control={form.control}
+                name="locationType"
+                render={() => (
+                  <FormItem>
+                    <FormLabel style={fieldLabelStyle}>
+                      Types de destination
+                    </FormLabel>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {locationTypes.map((type) => {
+                        const isSelected = selectedTypes.includes(type);
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => {
+                              const newTypes = isSelected
+                                ? selectedTypes.filter((t) => t !== type)
+                                : [...selectedTypes, type];
+                              setSelectedTypes(newTypes);
+                              form.setValue(
+                                "locationType",
+                                newTypes as never
+                              );
+                            }}
+                            style={{
+                              ...(isSelected
+                                ? buttonPrimaryStyle
+                                : buttonOutlineStyle),
+                              borderWidth: "2px",
+                              borderStyle: "solid",
+                              borderRadius: "12px",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              padding: "12px",
+                              height: "88px",
+                              cursor: "pointer",
+                            }}
+                            onMouseDown={(e) => {
+                              e.currentTarget.style.transform =
+                                buttonActiveStyle.transform || "";
+                            }}
+                            onMouseUp={(e) => {
+                              e.currentTarget.style.transform = "scale(1)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = "scale(1)";
+                            }}
+                            className="transition-transform duration-100 hover:shadow-md"
+                          >
+                            {locationTypeIcons[
+                              type as keyof typeof locationTypeIcons
+                            ]}
+                            <span className="text-sm font-semibold mt-1">
+                              {type.charAt(0).toUpperCase() + type.slice(1)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+ 
+              <FormField
+                control={form.control}
+                name="maxBudget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel style={fieldLabelStyle}>
+                      Budget maximum (€)
+                    </FormLabel>
+                    <FormControl>
                       <Input
-                        placeholder="Entrez votre ville de départ"
+                        type="number"
                         {...field}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10))
+                        }
                         className="border-gray-300 rounded-md focus:ring-2 focus:ring-pink-200 transition duration-150"
                       />
-                    </Autocomplete>
-                  )}
-                </FormControl>
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="maxDistance"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel style={fieldLabelStyle}>
-                  Distance maximale (km)
-                </FormLabel>
-                <FormControl>
-                  <Slider
-                    min={10}
-                    max={500}
-                    step={10}
-                    value={[field.value]}
-                    onValueChange={(val) =>
-                      form.setValue("maxDistance", val[0])
-                    }
-                    className="mt-2"
-                  />
-                </FormControl>
-                <p className="text-gray-600">{field.value} km</p>
-              </FormItem>
-            )}
-          />
-
-          {isLoaded && (
-            <GoogleMap
-              mapContainerStyle={mapContainerStyle}
-              center={coordinates}
-              zoom={10}
-              onLoad={(map) => {
-                mapRef.current = map;
-              }}
-            >
-              <Marker position={coordinates} />
-              <Circle
-                center={coordinates}
-                radius={circleRadius}
-                options={{
-                  strokeColor: "#FF385C",
-                  strokeOpacity: 0.8,
-                  strokeWeight: 2,
-                  fillOpacity: 0.15, // plus léger pour être moins agressif
-                }}
-              />
-            </GoogleMap>
-          )}
-
-          <FormField
-            control={form.control}
-            name="locationType"
-            render={() => (
-              <FormItem>
-                <FormLabel style={fieldLabelStyle}>
-                  Types de destination
-                </FormLabel>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {locationTypes.map((type) => {
-                    const isSelected = selectedTypes.includes(type);
-                    return (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => {
-                          const newTypes = isSelected
-                            ? selectedTypes.filter((t) => t !== type)
-                            : [...selectedTypes, type];
-                          setSelectedTypes(newTypes);
-                          form.setValue(
-                            "locationType",
-                            newTypes as never
-                          );
-                        }}
-                        style={{
-                          ...(isSelected
-                            ? buttonPrimaryStyle
-                            : buttonOutlineStyle),
-                          borderWidth: "2px",
-                          borderStyle: "solid",
-                          borderRadius: "12px",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          padding: "12px",
-                          height: "88px",
-                          cursor: "pointer",
-                        }}
-                        onMouseDown={(e) => {
-                          // Effet léger de clic
-                          (e.currentTarget.style.transform =
-                            buttonActiveStyle.transform || "");
-                        }}
-                        onMouseUp={(e) => {
-                          (e.currentTarget.style.transform = "scale(1)");
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget.style.transform = "scale(1)");
-                        }}
-                        className="transition-transform duration-100 hover:shadow-md"
-                      >
-                        {locationTypeIcons[
-                          type as keyof typeof locationTypeIcons
-                        ]}
-                        <span className="text-sm font-semibold mt-1">
-                          {type.charAt(0).toUpperCase() +
-                            type.slice(1)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {form.formState.errors.locationType && (
-                  <p className="text-sm text-red-600 mt-2">
-                    Sélectionnez au moins un type de destination
-                  </p>
+                    </FormControl>
+                  </FormItem>
                 )}
-              </FormItem>
-            )}
-          />
+              />
 
-          <FormField
-            control={form.control}
-            name="guests"
-            render={() => (
-              <FormItem>
-                <FormLabel>Nombre de voyageurs</FormLabel>
-                <GuestSelector control={form.control} name="guests" />
-              </FormItem>
-            )}
-          />
-
-
-          <FormField
-            control={form.control}
-            name="maxBudget"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel style={fieldLabelStyle}>
-                  Budget maximum (€)
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    {...field}
-                    onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
-                    className="border-gray-300 rounded-md focus:ring-2 focus:ring-pink-200 transition duration-150"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-
-<Button
-      type="submit" // Assurez-vous que le type est bien "submit"
-      className="w-full py-3 mt-4 text-lg rounded-md font-semibold transition duration-150"
-      style={buttonPrimaryStyle}
-      disabled={!isFormValid || createRequestMutation.isPending}
-      onMouseDown={(e) => {
-        (e.currentTarget.style.transform =
-          buttonActiveStyle.transform || "");
-      }}
-      onMouseUp={(e) => {
-        (e.currentTarget.style.transform = "scale(1)");
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget.style.transform = "scale(1)");
-      }}
-    >
-      {createRequestMutation.isPending && (
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-      )}
-      Soumettre la demande
-    </Button>
-        </form>
-      </Form>
-    </div>
-    </div>
+              <Button
+                type="submit" // Assurez-vous que le type est bien "submit"
+                className="w-full py-3 mt-4 text-lg rounded-md font-semibold transition duration-150"
+                style={buttonPrimaryStyle}
+                disabled={!isFormValid || createRequestMutation.isPending}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform =
+                    buttonActiveStyle.transform || "";
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
+              >
+                {createRequestMutation.isPending && (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                )}
+                Soumettre la demande
+              </Button>
+            </form>
+          </Form>
+        </div>
+      </div>
     </div>
   );
 }
