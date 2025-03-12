@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertUserSchema, type InsertUser } from "@shared/schema";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Redirect } from "wouter";
+import { Navigate } from "react-router-dom";
 import { Building2, Home, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -54,7 +54,7 @@ export default function AuthPage() {
   });
 
   if (user) {
-    return <Redirect to="/" />;
+    return <Navigate to="/" replace />;
   }
 
   return (
@@ -139,9 +139,17 @@ export default function AuthPage() {
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="landlord"
-                      {...registerForm.register("isLandlord")}
+                      checked={registerForm.watch("isLandlord")}
+                      onCheckedChange={(checked) => {
+                        registerForm.setValue("isLandlord", checked === true);
+                      }}
                     />
-                    <Label htmlFor="landlord">I am a property owner</Label>
+                    <Label htmlFor="landlord" className="cursor-pointer" onClick={() => {
+                      const currentValue = registerForm.getValues("isLandlord");
+                      registerForm.setValue("isLandlord", !currentValue);
+                    }}>
+                      Je suis propriétaire
+                    </Label>
                   </div>
                   <Button
                     type="submit"

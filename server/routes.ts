@@ -106,7 +106,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         username: user.username,
         email: user.email,
         address: user.address || '',
-        phone: user.phone || ''
+        phone: user.phone || '',
+        isLandlord: user.isLandlord
       });
     } catch (error) {
       res.status(500).json({ error: "Erreur lors de la récupération des informations de l'utilisateur" });
