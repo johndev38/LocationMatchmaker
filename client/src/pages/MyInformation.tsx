@@ -73,12 +73,12 @@ export default function MyInformation() {
       <Header />
       <div className="container mx-auto p-20">
         <h2 className="text-2xl font-bold mb-4">Mes informations</h2>
-        
         {/* Case non éditable pour le statut propriétaire/non-propriétaire */}
         {data && (
           <div className="mb-6 p-4 bg-gray-100 rounded-md">
             <p className="text-sm font-medium text-gray-700">Statut du compte</p>
             <p className="font-semibold">
+      
               {data.isLandlord ? 'Propriétaire' : 'Locataire'}
             </p>
             <p className="text-xs text-gray-500 mt-1">

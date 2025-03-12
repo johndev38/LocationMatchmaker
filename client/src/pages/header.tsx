@@ -19,9 +19,9 @@ export default function Header() {
           <Link to="/" className="transition hover:text-pink-500">
             <Button variant="ghost">Accueil</Button>
           </Link>
-          <Link to="/find-rental" className="transition hover:text-pink-500">
+          {/* <Link to="/find-rental" className="transition hover:text-pink-500">
             <Button variant="ghost">Recherche</Button>
-          </Link>
+          </Link> */}
           <Link to="/create-request" className="transition hover:text-pink-500">
             <Button variant="ghost">Publier une annonce</Button>
           </Link>
