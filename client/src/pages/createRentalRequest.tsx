@@ -45,6 +45,7 @@ import { useNavigate } from "react-router-dom";
 import Header from "./header";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 import GuestSelector from "@/lib/GuestSelector";
+// import ProfileTab from "./ProfileTab";
 
 /* 
   🔹 Couleurs, typographie et spacing inspirés d'Airbnb
@@ -292,6 +293,7 @@ export default function CreateRentalRequest() {
   return (
     <div>
       <Header />
+      {/* <ProfileTab /> */}
       <div style={containerStyle}>
         <div className="pt-20">
           <h2 style={headingStyle}>Créer une demande de location</h2>

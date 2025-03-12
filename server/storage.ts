@@ -27,7 +27,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+    return user ? { ...user, address: user.address, phone: user.phone } : undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
@@ -134,6 +134,20 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(rentalRequests)
       .where(eq(rentalRequests.id, requestId) && eq(rentalRequests.userId, userId));
+  }
+
+  async updateUser(id: number, data: { name: string; email: string; address: string; phone: string }): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        username: data.name,
+        email: data.email,
+        address: data.address,
+        phone: data.phone,
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return updatedUser;
   }
 }
 

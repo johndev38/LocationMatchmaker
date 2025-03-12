@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Home, Loader2 } from "lucide-react";
+import { Home, Loader2, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import React from "react";
+import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 
 export default function Header() {
   const { user, logoutMutation } = useAuth();
@@ -30,14 +32,30 @@ export default function Header() {
             <Button variant="ghost">Mes annonces</Button>
           </Link>
           {user ? (
-            <Button
-              variant="destructive"
-              onClick={() => logoutMutation.mutate()}
-              disabled={logoutMutation.isPending}
-              className="transition-transform transform hover:scale-105"
-            >
-              {logoutMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Déconnexion"}
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 hover:bg-gray-300">
+                  <User className="h-6 w-6 text-gray-600" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="p-2 bg-white shadow-md rounded-md">
+                <ul className="flex flex-col gap-2">
+                  <li>
+                    <Link to="/profile" className="text-gray-800 hover:text-pink-500">
+                      Mes informations
+                    </Link>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => logoutMutation.mutate()}
+                      className="text-gray-800 hover:text-pink-500"
+                    >
+                      Déconnexion
+                    </button>
+                  </li>
+                </ul>
+              </PopoverContent>
+            </Popover>
           ) : (
             <Link to="/login">
               <Button variant="default" className="transition-transform transform hover:scale-105">

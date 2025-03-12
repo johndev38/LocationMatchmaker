@@ -7,6 +7,9 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   isLandlord: boolean("is_landlord").notNull().default(false),
+  address: text("address"),
+  phone: text("phone"),
+  email: text("email").notNull().unique(),
 });
 
 export const rentalRequests = pgTable("rental_requests", {
@@ -46,6 +49,9 @@ export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
   isLandlord: true,
+  address: true,
+  phone: true,
+  email: true,
 });
 
 export const locationTypes = [

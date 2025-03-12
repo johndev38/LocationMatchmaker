@@ -11,6 +11,7 @@ import CreateRentalRequest from "./pages/createRentalRequest";
 import { ProtectedRoute } from "./lib/protected-route";
 import FindRental from "./pages/findRental";
 import MyListings from "./pages/myListings";
+import MyInformation from "./pages/MyInformation";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
               <Route path="/find-rental" element={<FindRental />} />
               <Route path="/my-listings" element={<MyListings />} />
               <Route path="/create-request" element={<CreateRentalRequest />} />
+              <Route path="/profile" element={<MyInformation />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

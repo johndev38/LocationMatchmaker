@@ -3,6 +3,9 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertRentalRequestSchema, insertPropertyOfferSchema, insertMessageSchema } from "@shared/schema";
+import express from 'express';
+
+const router = express.Router();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -91,6 +94,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Route pour récupérer les informations de l'utilisateur
+  app.get('/api/user-info', async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ error: "Utilisateur non trouvé" });
+      }
+      res.json({
+        username: user.username,
+        email: user.email,
+        address: user.address || '',
+        phone: user.phone || ''
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la récupération des informations de l'utilisateur" });
+    }
+  });
+
+  // Route pour mettre à jour les informations de l'utilisateur
+  app.post('/api/user-info', async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { name, email, address, phone } = req.body;
+    // Logique pour mettre à jour les informations de l'utilisateur
+    try {
+      const updatedUser = await storage.updateUser(req.user!.id, { name, email, address, phone });
+      res.json(updatedUser);
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la mise à jour des informations de l'utilisateur" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
+
+export default router;

@@ -31,6 +31,9 @@ export default function AuthPage() {
       username: "",
       password: "",
       isLandlord: false,
+      email: "",
+      address: "",
+      phone: "",
     },
   });
 
@@ -115,6 +118,14 @@ export default function AuthPage() {
                     <Input
                       id="register-username"
                       {...registerForm.register("username")}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="register-email">Email</Label>
+                    <Input
+                      id="register-email"
+                      type="email"
+                      {...registerForm.register("email")}
                     />
                   </div>
                   <div>

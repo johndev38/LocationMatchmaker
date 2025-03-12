@@ -34,7 +34,7 @@ export default function FindRental() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Ajout du Header */}
+      {/* Header */}
       <Header />
 
       {/* Contenu avec un padding-top pour éviter le chevauchement avec le Header */}
@@ -58,6 +58,29 @@ export default function FindRental() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
+                  <p className="text-gray-600">
+                    Ville de départ :{" "}
+                    <span className="font-semibold">{request.departureCity}</span>
+                  </p>
+                  <p className="text-gray-600">
+                    Période :{" "}
+                    <span className="font-semibold">
+                      {new Date(request.startDate).toLocaleDateString()} -{" "}
+                      {new Date(request.endDate).toLocaleDateString()}
+                    </span>
+                  </p>
+                  <p className="text-gray-600">
+                    Types de destination :{" "}
+                    <span className="font-semibold">
+                      {Array.isArray(request.locationType)
+                        ? request.locationType.join(", ")
+                        : request.locationType}
+                    </span>
+                  </p>
+                  <p className="text-gray-600">
+                    Distance maximale :{" "}
+                    <span className="font-semibold">{request.maxDistance} km</span>
+                  </p>
                   <p className="text-gray-600">
                     Budget :{" "}
                     <span className="font-semibold">{request.maxBudget}€</span>
