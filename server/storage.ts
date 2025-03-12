@@ -5,9 +5,10 @@ import type {
   RentalRequest,
   PropertyOffer,
   Message,
+  Notification,
 } from "@shared/schema";
-import { users, rentalRequests, propertyOffers, messages } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { users, rentalRequests, propertyOffers, messages, notifications } from "@shared/schema";
+import { eq, and, or } from "drizzle-orm";
 import { db } from "./db";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -148,6 +149,132 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return updatedUser;
+  }
+
+  // Méthodes pour les notifications
+  async createNotification(
+    userId: number,
+    type: string,
+    content: string,
+    relatedId?: number
+  ): Promise<Notification> {
+    const [notification] = await db
+      .insert(notifications)
+      .values({
+        userId,
+        type,
+        content,
+        relatedId,
+        isRead: false,
+        timestamp: new Date().toISOString(),
+      })
+      .returning();
+    return notification;
+  }
+
+  async getNotifications(userId: number): Promise<Notification[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(notifications.id, "desc");
+  }
+
+  async markNotificationAsRead(notificationId: number): Promise<Notification> {
+    const [notification] = await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, notificationId))
+      .returning();
+    return notification;
+  }
+
+  async markAllNotificationsAsRead(userId: number): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  // Méthodes pour la gestion des offres
+  async updatePropertyOfferStatus(
+    offerId: number,
+    status: string,
+    landlordId: number
+  ): Promise<PropertyOffer> {
+    const [offer] = await db
+      .update(propertyOffers)
+      .set({ status })
+      .where(
+        and(
+          eq(propertyOffers.id, offerId),
+          eq(propertyOffers.landlordId, landlordId)
+        )
+      )
+      .returning();
+    
+    // Récupérer la demande associée à cette offre
+    const [request] = await db
+      .select()
+      .from(rentalRequests)
+      .where(eq(rentalRequests.id, offer.requestId));
+    
+    // Créer une notification pour l'utilisateur qui a fait la demande
+    if (status === "accepted" || status === "rejected") {
+      const notificationType = status === "accepted" ? "offer_accepted" : "offer_rejected";
+      const notificationContent = status === "accepted" 
+        ? "Votre demande a été acceptée par un propriétaire!"
+        : "Une offre sur votre demande a été refusée par un propriétaire.";
+      
+      await this.createNotification(
+        request.userId,
+        notificationType,
+        notificationContent,
+        offerId
+      );
+    }
+    
+    return offer;
+  }
+
+  async getLandlordOffers(landlordId: number): Promise<PropertyOffer[]> {
+    return await db
+      .select()
+      .from(propertyOffers)
+      .where(eq(propertyOffers.landlordId, landlordId));
+  }
+
+  // Méthode pour créer une offre avec notification
+  async createPropertyOfferWithNotification(
+    landlordId: number,
+    offer: Omit<PropertyOffer, "id" | "landlordId" | "status">
+  ): Promise<PropertyOffer> {
+    // Créer l'offre
+    const propertyOffer = await this.createPropertyOffer(landlordId, offer);
+    
+    // Récupérer les informations de la demande
+    const [request] = await db
+      .select()
+      .from(rentalRequests)
+      .where(eq(rentalRequests.id, offer.requestId));
+    
+    if (request) {
+      // Récupérer les informations du propriétaire
+      const [landlord] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, landlordId));
+      
+      // Créer une notification pour l'utilisateur qui a fait la demande
+      await this.createNotification(
+        request.userId,
+        "new_offer",
+        `Vous avez reçu une nouvelle offre pour votre demande de ${request.departureCity} de la part de ${landlord.username}.`,
+        propertyOffer.id
+      );
+    }
+    
+    return propertyOffer;
   }
 }
 

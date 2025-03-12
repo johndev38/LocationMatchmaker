@@ -45,6 +45,16 @@ export const messages = pgTable("messages", {
   timestamp: text("timestamp").notNull(),
 });
 
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(), // 'offer_received', 'offer_accepted', 'offer_rejected', etc.
+  content: text("content").notNull(),
+  relatedId: integer("related_id"), // ID de l'offre ou de la demande concernée
+  isRead: boolean("is_read").notNull().default(false),
+  timestamp: text("timestamp").notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -94,8 +104,14 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   timestamp: true,
 });
 
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  timestamp: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type RentalRequest = typeof rentalRequests.$inferSelect;
 export type PropertyOffer = typeof propertyOffers.$inferSelect;
 export type Message = typeof messages.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

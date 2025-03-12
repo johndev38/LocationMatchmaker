@@ -12,16 +12,25 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Navigate } from "react-router-dom";
 import { Building2, Home, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { z } from "zod";
+
+// Schéma de validation pour le formulaire de connexion
+const loginSchema = z.object({
+  username: z.string().min(1, "Le nom d'utilisateur est requis"),
+  password: z.string().min(1, "Le mot de passe est requis"),
+});
+
+// Type pour les données de connexion
+type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
 
-  const loginForm = useForm<InsertUser>({
-    resolver: zodResolver(insertUserSchema),
+  const loginForm = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
     defaultValues: {
       username: "",
       password: "",
-      isLandlord: false,
     },
   });
 
@@ -84,6 +93,11 @@ export default function AuthPage() {
                       id="login-username"
                       {...loginForm.register("username")}
                     />
+                    {loginForm.formState.errors.username && (
+                      <p className="text-sm text-red-500 mt-1">
+                        {loginForm.formState.errors.username.message}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="login-password">Password</Label>
@@ -92,6 +106,11 @@ export default function AuthPage() {
                       type="password"
                       {...loginForm.register("password")}
                     />
+                    {loginForm.formState.errors.password && (
+                      <p className="text-sm text-red-500 mt-1">
+                        {loginForm.formState.errors.password.message}
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="submit"

@@ -50,7 +50,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const validatedData = insertPropertyOfferSchema.parse(req.body);
-      const offer = await storage.createPropertyOffer(req.user!.id, validatedData);
+      const offer = await storage.createPropertyOfferWithNotification(req.user!.id, validatedData);
       res.status(201).json(offer);
     } catch (error) {
       res.status(400).json({ error: "Invalid offer data" });
@@ -124,6 +124,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedUser);
     } catch (error) {
       res.status(500).json({ error: "Erreur lors de la mise à jour des informations de l'utilisateur" });
+    }
+  });
+
+  // Route pour récupérer les offres d'un propriétaire
+  app.get("/api/landlord/property-offers", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user!.isLandlord) {
+      return res.sendStatus(401);
+    }
+    try {
+      const offers = await storage.getLandlordOffers(req.user!.id);
+      res.json(offers);
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la récupération des offres" });
+    }
+  });
+
+  // Route pour accepter ou refuser une offre
+  app.put("/api/property-offers/:offerId/status", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user!.isLandlord) {
+      return res.sendStatus(401);
+    }
+
+    const { status } = req.body;
+    const offerId = parseInt(req.params.offerId);
+
+    if (!status || (status !== "accepted" && status !== "rejected")) {
+      return res.status(400).json({ error: "Statut invalide" });
+    }
+
+    try {
+      const offer = await storage.updatePropertyOfferStatus(offerId, status, req.user!.id);
+      res.json(offer);
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la mise à jour du statut de l'offre" });
+    }
+  });
+
+  // Routes pour les notifications
+  
+  // Récupérer les notifications de l'utilisateur connecté
+  app.get("/api/notifications", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const notifications = await storage.getNotifications(req.user!.id);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la récupération des notifications" });
+    }
+  });
+
+  // Marquer une notification comme lue
+  app.put("/api/notifications/:notificationId/read", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const notification = await storage.markNotificationAsRead(parseInt(req.params.notificationId));
+      res.json(notification);
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la mise à jour de la notification" });
+    }
+  });
+
+  // Marquer toutes les notifications comme lues
+  app.put("/api/notifications/read-all", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      await storage.markAllNotificationsAsRead(req.user!.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la mise à jour des notifications" });
     }
   });
 
