@@ -6,12 +6,6 @@ import {
 } from "@radix-ui/react-popover";
 import { Minus, Plus } from "lucide-react";
 
-/**
- * Props attendues par le composant GuestSelector :
- * - adults, children, babies, pets : nombres actuels
- * - onAdultsChange, onChildrenChange, etc. : callbacks
- *   qui remontent les nouvelles valeurs au parent
- */
 interface GuestSelectorProps {
   adults: number;
   onAdultsChange: (newValue: number) => void;
@@ -33,24 +27,40 @@ export default function GuestSelector({
   pets,
   onPetsChange,
 }: GuestSelectorProps) {
-  // État pour gérer l'ouverture du pop-up
+  // État local pour contrôler l'ouverture du pop-up
   const [isOpen, setIsOpen] = useState(false);
 
-  // Calcul du total de voyageurs (hors animaux)
-  const totalGuests = adults + children + babies;
+  // Calcul du nombre total de voyageurs (hors bébés et animaux)
+  const totalVoyageurs = adults + children;
 
-  // Label du bouton : si aucun voyageur, on met un texte par défaut
-  // Sinon, on affiche le nombre de voyageurs et d'animaux
-  const buttonLabel =
-    totalGuests > 0
-      ? `Voyageurs: ${totalGuests}${
-          pets > 0 ? ` • ${pets} animal(aux)` : ""
-        }`
-      : "Voyageurs - Ajoutez des voyageurs";
+  // On prépare des morceaux de texte (ex: "2 voyageurs", "1 bébé", "1 animale")
+  const summaryParts: string[] = [];
+
+  // Affichage « X voyageur(s) »
+  if (totalVoyageurs > 0) {
+    summaryParts.push(
+      `${totalVoyageurs} voyageur${totalVoyageurs > 1 ? "s" : ""}`
+    );
+  }
+
+  // Affichage « X bébé(s) »
+  if (babies > 0) {
+    summaryParts.push(`${babies} bébé${babies > 1 ? "s" : ""}`);
+  }
+
+  // Affichage « X animal(aux) »
+  if (pets > 0) {
+    summaryParts.push(`${pets} animal${pets > 1 ? "aux" : ""}`);
+  }
+
+  // Si on n'a aucune sélection, on affiche un texte par défaut
+  const buttonLabel = summaryParts.length
+    ? summaryParts.join(", ")
+    : "Voyageurs - Ajoutez des voyageurs";
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      {/* Bouton déclencheur du pop-up */}
+      {/* Bouton principal : récapitulatif (ex: "2 voyageurs, 1 bébé") */}
       <PopoverTrigger asChild>
         <button
           className="px-4 py-2 border rounded-full hover:shadow-sm transition"
@@ -59,14 +69,13 @@ export default function GuestSelector({
         </button>
       </PopoverTrigger>
 
-      {/* Contenu du pop-up */}
+      {/* Contenu du pop-up : compteurs pour adultes, enfants, bébés, animaux */}
       <PopoverContent
-        className="p-4 shadow-lg rounded-xl border bg-white w-72"
+        className="z-50 p-4 shadow-lg rounded-xl border bg-white w-72"
         align="end"
         sideOffset={8}
       >
         <div className="flex flex-col space-y-4">
-
           {/* Adultes */}
           <div className="flex justify-between items-center">
             <div className="flex flex-col">
@@ -161,7 +170,7 @@ export default function GuestSelector({
 
           <hr className="my-2" />
 
-          {/* Boutons de contrôle (en bas du pop-up) */}
+          {/* Boutons en bas du pop-up */}
           <div className="flex justify-end space-x-2">
             <button
               className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
