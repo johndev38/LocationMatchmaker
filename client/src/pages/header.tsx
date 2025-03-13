@@ -23,15 +23,21 @@ export default function Header() {
           {/* <Link to="/find-rental" className="transition hover:text-pink-500">
             <Button variant="ghost">Recherche</Button>
           </Link> */}
-          <Link to="/create-request" className="transition hover:text-pink-500">
-            <Button variant="ghost">Publier une annonce</Button>
-          </Link>
-          <Link to="/dashboard" className="transition hover:text-pink-500">
-            <Button variant="ghost">Espace professionnel</Button>
-          </Link>
-          <Link to="/my-listings" className="transition hover:text-pink-500">
-            <Button variant="ghost">Mes annonces</Button>
-          </Link>
+          {!user?.isLandlord && (
+            <Link to="/create-request" className="transition hover:text-pink-500">
+              <Button variant="ghost">Publier une annonce</Button>
+            </Link>
+          )}
+          {user?.isLandlord && (
+            <Link to="/dashboard" className="transition hover:text-pink-500">
+              <Button variant="ghost">Espace professionnel</Button>
+            </Link>
+          )}
+          {user && (
+            <Link to="/my-listings" className="transition hover:text-pink-500">
+              <Button variant="ghost">Mes annonces</Button>
+            </Link>
+          )}
           {user ? (
             <>
               <NotificationCenter />

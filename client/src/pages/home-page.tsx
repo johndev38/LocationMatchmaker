@@ -3,17 +3,6 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import Header from './header';
 
-// Import des images
-import heroImage from '@/assets/images/hero.jpg';
-import step1Image from '@/assets/images/step1.png';
-import step2Image from '@/assets/images/step2.png';
-import step3Image from '@/assets/images/step3.png';
-import listing1Image from '@/assets/images/listing1.jpg';
-import listing2Image from '@/assets/images/listing2.jpg';
-import listing3Image from '@/assets/images/listing3.jpg';
-import user1Image from '@/assets/images/user1.jpg';
-import user2Image from '@/assets/images/user2.jpg';
-
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
 
@@ -24,7 +13,7 @@ export default function HomePage() {
       {/* Section Hero avec image de fond */}
       <section className="relative">
         <img
-          src={heroImage}
+          src="https://unsplash.com/photos/pJadQetzTkI/download?force=true"
           alt="Logement idéal"
           className="w-full h-96 object-cover"
         />
@@ -37,7 +26,7 @@ export default function HomePage() {
               <Button size="lg">Chercher un logement</Button>
             </Link>
             <Link to="/create-request">
-              <Button size="lg" variant="outline">
+              <Button size="lg" variant="secondary" className="bg-pink-500 hover:bg-pink-600 text-white">
                 Publier une annonce
               </Button>
             </Link>
@@ -52,27 +41,27 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
             <div>
               <img
-                src={step1Image}
+                src="/images/step1.png"
                 alt="Déposer une annonce"
-                className="w-full h-48 object-cover rounded-lg shadow-md mb-4"
+                className="w-full h-96 object-cover rounded-lg shadow-md mb-4"
               />
               <h3 className="text-xl font-semibold">1. Déposez une annonce</h3>
               <p>Publiez votre recherche ou offre de logement en quelques clics.</p>
             </div>
             <div>
               <img
-                src={step2Image}
+                src="/images/step2.png"
                 alt="Recevoir des propositions"
-                className="w-full h-48 object-cover rounded-lg shadow-md mb-4"
+                className="w-full h-96 object-cover rounded-lg shadow-md mb-4"
               />
               <h3 className="text-xl font-semibold">2. Recevez des propositions</h3>
               <p>Obtenez des offres personnalisées de nos partenaires et utilisateurs.</p>
             </div>
             <div>
               <img
-                src={step3Image}
+                src="/images/step3.png"
                 alt="Réserver en direct"
-                className="w-full h-48 object-cover rounded-lg shadow-md mb-4"
+                className="w-full h-96 object-cover rounded-lg shadow-md mb-4"
               />
               <h3 className="text-xl font-semibold">3. Réservez en direct</h3>
               <p>Finalisez votre réservation directement via notre plateforme sécurisée.</p>
@@ -81,12 +70,12 @@ export default function HomePage() {
         </section>
 
         {/* Section "Dernières annonces populaires" */}
-        <section className="text-center py-20 bg-gray-100 rounded-lg p-8">
+        {/* <section className="text-center py-20 bg-gray-100 rounded-lg p-8">
           <h2 className="text-3xl font-bold mb-4">Dernières annonces populaires</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
             <div className="border rounded-lg overflow-hidden shadow-md">
               <img
-                src={listing1Image}
+                src="/images/listing1.jpg"
                 alt="Appartement lumineux"
                 className="w-full h-48 object-cover"
               />
@@ -97,7 +86,7 @@ export default function HomePage() {
             </div>
             <div className="border rounded-lg overflow-hidden shadow-md">
               <img
-                src={listing2Image}
+                src="/images/listing2.jpg"
                 alt="Studio moderne"
                 className="w-full h-48 object-cover"
               />
@@ -108,7 +97,7 @@ export default function HomePage() {
             </div>
             <div className="border rounded-lg overflow-hidden shadow-md">
               <img
-                src={listing3Image}
+                src="/images/listing3.jpg"
                 alt="Maison de charme"
                 className="w-full h-48 object-cover"
               />
@@ -118,7 +107,7 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-        </section>
+        </section> */}
 
         {/* Section "Ce que nos utilisateurs disent" */}
         <section className="text-center py-20">
@@ -126,7 +115,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
             <div className="flex flex-col items-center">
               <img
-                src={user1Image}
+                src="https://cdn.pixabay.com/photo/2016/11/29/13/14/attractive-1869761_1280.jpg"
                 alt="Jean Dupont"
                 className="w-24 h-24 rounded-full object-cover mb-4"
               />
@@ -135,7 +124,7 @@ export default function HomePage() {
             </div>
             <div className="flex flex-col items-center">
               <img
-                src={user2Image}
+                src="https://cdn.pixabay.com/photo/2018/02/16/14/38/portrait-3157821_1280.jpg"
                 alt="Marie Curie"
                 className="w-24 h-24 rounded-full object-cover mb-4"
               />
