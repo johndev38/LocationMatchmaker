@@ -184,10 +184,10 @@ export class DatabaseStorage implements IStorage {
   async getNotifications(userId: number): Promise<Notification[]> {
     return await db
       .select()
-      .from(notifications)
+      .from(notifications)        
       .where(eq(notifications.userId, userId))
       .orderBy(notifications.id, "desc");
-  }
+  }   
 
   async markNotificationAsRead(notificationId: number): Promise<Notification> {
     const [notification] = await db
@@ -333,6 +333,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addPropertyPhoto(propertyId: number, photoUrl: string) {
+    console.log("Adding photo:", photoUrl, "to property:", propertyId);
+    
     const [property] = await db
       .select()
       .from(properties)
@@ -343,6 +345,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const updatedPhotos = [...(property.photos || []), photoUrl];
+    console.log("Updated photos array:", updatedPhotos);
     
     const [updatedProperty] = await db
       .update(properties)

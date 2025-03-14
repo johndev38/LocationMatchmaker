@@ -106,22 +106,19 @@ export default function MyProperty() {
     queryKey: ["property"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/property");
-      if (!response.ok)
+      if (!response.ok) {
         throw new Error("Erreur lors de la récupération des informations du bien");
-      return response.json();
+      }
+      const data = await response.json();
+      // Initialiser les états avec les données reçues
+      setTitle(data.title || "");
+      setDescription(data.description || "");
+      setAddress(data.address || "");
+      setSelectedAmenities(data.amenities || []);
+      return data;
     },
     enabled: user?.isLandlord,
   });
-
-  // Mettre à jour les champs lorsque les données sont chargées
-  useEffect(() => {
-    if (property) {
-      setTitle(property.title);
-      setDescription(property.description);
-      setAddress(property.address);
-      setSelectedAmenities(property.amenities || []);
-    }
-  }, [property]);
 
   // Nettoyer les prévisualisations à la destruction du composant
   useEffect(() => {
@@ -172,55 +169,38 @@ export default function MyProperty() {
   });
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    // Limiter le nombre total de photos en attente à 5
-    if (pendingPhotos.length + files.length > 5) {
+    const files = Array.from(e.target.files || []);
+    
+    // Vérifier le nombre total de photos (existantes + en attente + nouvelles)
+    const totalPhotos = (property?.photos?.length || 0) + pendingPhotos.length + files.length;
+    if (totalPhotos > 5) {
       toast({
-        title: "Attention",
-        description: "Vous ne pouvez pas sélectionner plus de 5 photos au total",
+        title: "Erreur",
+        description: "Vous ne pouvez pas ajouter plus de 5 photos au total",
         variant: "destructive",
       });
       return;
     }
 
-    // Créer des prévisualisations pour chaque fichier
-    const newPendingPhotos: PreviewPhoto[] = [];
+    // Créer les prévisualisations pour les nouvelles photos
+    const newPhotos = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file)
+    }));
+
+    setPendingPhotos(prev => [...prev, ...newPhotos]);
     
-    Array.from(files).forEach((file) => {
-      // Vérifier la taille du fichier (max 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-        toast({
-          title: "Attention",
-          description: "Les images ne doivent pas dépasser 2MB chacune",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Créer une URL de prévisualisation
-      const previewUrl = URL.createObjectURL(file);
-      newPendingPhotos.push({
-        file,
-        preview: previewUrl
-      });
-    });
-
-    // Ajouter les nouvelles photos aux photos en attente
-    setPendingPhotos(prev => [...prev, ...newPendingPhotos]);
-
-    // Activer le mode édition automatiquement si on ajoute des photos
+    // Activer le mode édition automatiquement
     if (!isEditing) {
       setIsEditing(true);
     }
-
+    
     // Réinitialiser l'input file
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
-
+  
   const removePendingPhoto = (index: number) => {
     setPendingPhotos(prev => {
       // Libérer l'URL de la prévisualisation
@@ -231,21 +211,47 @@ export default function MyProperty() {
     });
   };
 
+  const handleDeletePhoto = async (photoUrl: string) => {
+    try {
+      const response = await apiRequest("DELETE", `/api/property/photo?url=${encodeURIComponent(photoUrl)}`);
+      if (!response.ok) {
+        throw new Error("Erreur lors de la suppression de la photo");
+      }
+      
+      // Mettre à jour l'état local après la suppression réussie
+      if (property) {
+        property.photos = property.photos.filter(p => p !== photoUrl);
+      }
+      
+      toast({
+        title: "Succès",
+        description: "La photo a été supprimée",
+      });
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Une erreur s'est produite lors de la suppression",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       setUploadingPhotos(true);
   
-      // 1. D'abord, mettre à jour les informations du bien (sans les photos)
-      const basicFormData = new FormData();
-      basicFormData.append("title", title);
-      basicFormData.append("description", description);
-      basicFormData.append("address", address);
-      basicFormData.append("amenities", JSON.stringify(selectedAmenities));
+      // Données de la propriété
+      const propertyData = {
+        title,
+        description,
+        address,
+        amenities: selectedAmenities
+      };
   
       // Mise à jour des informations de base
-      const basicInfoResponse = await apiRequest("PUT", "/api/property", basicFormData);
+      const basicInfoResponse = await apiRequest("PUT", "/api/property", propertyData);
       
       if (!basicInfoResponse.ok) {
         const errorText = await basicInfoResponse.text();
@@ -258,7 +264,7 @@ export default function MyProperty() {
         try {
           const propertyData = await basicInfoResponse.json();
           
-          // Mise à jour direct sans FormData complexe
+          // Upload des photos une par une
           for (let i = 0; i < pendingPhotos.length; i++) {
             const photoData = new FormData();
             photoData.append("propertyId", propertyData.id.toString());
@@ -267,9 +273,6 @@ export default function MyProperty() {
             const photoResponse = await fetch("/api/property/upload-photo", {
               method: "POST",
               body: photoData,
-              headers: {
-                // Pas d'en-tête Content-Type pour FormData
-              },
               credentials: "include"
             });
             
@@ -295,7 +298,16 @@ export default function MyProperty() {
       
       setIsEditing(false);
       setPendingPhotos([]); // Vider les photos en attente
-      window.location.reload(); // Recharger pour afficher les changements
+      
+      // Rafraîchir les données sans recharger toute la page
+      const refreshResponse = await apiRequest("GET", "/api/property");
+      if (refreshResponse.ok) {
+        const refreshedData = await refreshResponse.json();
+        setTitle(refreshedData.title || "");
+        setDescription(refreshedData.description || "");
+        setAddress(refreshedData.address || "");
+        setSelectedAmenities(refreshedData.amenities || []);
+      }
       
     } catch (error) {
       console.error("Erreur lors de la mise à jour:", error);
@@ -451,56 +463,77 @@ export default function MyProperty() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {pendingPhotos.map((photo, index) => (
                       <div key={`pending-${index}`} className="relative group">
-                        <div className="aspect-video relative overflow-hidden rounded-lg border-2 border-pink-300">
-                          <img
-                            src={photo.preview}
-                            alt={`Photo en attente ${index + 1}`}
-                            className="object-cover w-full h-full"
-                          />
-                        </div>
-                        <div className="absolute top-2 right-2">
-                          <button
-                            onClick={() => removePendingPhoto(index)}
-                            className="p-1 bg-red-500 text-white rounded-full"
-                            type="button"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
+                        <img
+                          src={photo.preview}
+                          alt={`Photo ${index + 1}`}
+                          className="w-full h-48 object-cover rounded-lg border-2 border-pink-200"
+                        />
+                        <button
+                          onClick={() => removePendingPhoto(index)}
+                          className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
                     ))}
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Ces photos seront ajoutées lorsque vous enregistrerez les modifications
-                  </p>
                 </div>
               )}
 
-              <h3 className="text-sm font-medium mb-3">Photos existantes :</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {property?.photos?.map((photo: string, index: number) => (
-                  <div key={index} className="relative group">
-                    <div className="aspect-video relative overflow-hidden rounded-lg">
-                      <img
-                        src={photo}
-                        alt={`Photo ${index + 1}`}
-                        className="object-cover w-full h-full"
-                      />
-                    </div>
-                    {isEditing && (
-                      <button
-                        onClick={() => deletePhotoMutation.mutate(photo)}
-                        className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
+              {property && property.photos && property.photos.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-medium mb-3">Photos actuelles :</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {property.photos.map((photo, index) => {
+                      // S'assurer que l'URL de la photo est complète et pointe vers le bon serveur
+                      // Le serveur Express tourne sur le port 5000
+                      const serverBaseUrl = 'http://localhost:5000';
+                      const photoUrl = photo.startsWith('http') 
+                        ? photo 
+                        : photo.startsWith('/') 
+                          ? `${serverBaseUrl}${photo}` 
+                          : `${serverBaseUrl}/${photo}`;
+                      
+                      console.log("URL de la photo:", photoUrl);
+                      
+                      return (
+                        <div key={`existing-${index}`} className="relative group">
+                          <div className="w-full h-48 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+                            <img
+                              src={photoUrl}
+                              alt={`Photo ${index + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error(`Erreur de chargement d'image: ${photoUrl}`);
+                                // Créer une URL de remplacement avec un timestamp pour éviter la mise en cache
+                                const fallbackUrl = `${serverBaseUrl}/uploads/d6443ac9-8d52-4d8b-a187-317f8e618eeb.webp?t=${Date.now()}`;
+                                console.log("Tentative avec URL alternative:", fallbackUrl);
+                                
+                                const img = e.target as HTMLImageElement;
+                                img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiNGREQ4RTUiLz48dGV4dCB4PSI0MCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiNFOTFFNjMiPkltYWdlIG5vbiBkaXNwb25pYmxlPC90ZXh0Pjwvc3ZnPg==';
+                                
+                                // Éviter les styles qui pourraient causer des problèmes
+                                img.style.objectFit = 'contain';
+                                img.style.backgroundColor = '#FFF5F8';
+                              }}
+                            />
+                          </div>
+                          {isEditing && (
+                            <button
+                              onClick={() => handleDeletePhoto(photo)}
+                              className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-              {(!property?.photos || property.photos.length === 0) && pendingPhotos.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  Aucune photo n'a été ajoutée
+                </div>
+              ) : (
+                <div className="text-center text-gray-500 py-8">
+                  Aucune photo n'a encore été ajoutée
                 </div>
               )}
             </CardContent>

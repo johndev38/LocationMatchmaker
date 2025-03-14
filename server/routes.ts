@@ -7,6 +7,8 @@ import express from 'express';
 import { and, eq } from "drizzle-orm";
 import { db } from "./db";
 import { upload } from "./upload";
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
 
@@ -249,15 +251,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     try {
-      const formData = req.body;
+      let propertyData;
       
-      // Extraire les données du formulaire
-      const propertyData = {
-        title: formData.title || "",
-        description: formData.description || "",
-        address: formData.address || "",
-        amenities: formData.amenities ? JSON.parse(formData.amenities) : [],
-      };
+      // Vérifier si les données sont dans req.body directement (JSON) ou en FormData
+      if (req.headers['content-type']?.includes('application/json')) {
+        // Données JSON
+        propertyData = {
+          title: req.body.title || "",
+          description: req.body.description || "",
+          address: req.body.address || "",
+          amenities: req.body.amenities || [],
+        };
+      } else {
+        // FormData
+        propertyData = {
+          title: req.body.title || "",
+          description: req.body.description || "",
+          address: req.body.address || "",
+          amenities: req.body.amenities ? JSON.parse(req.body.amenities) : [],
+        };
+      }
+      
+      console.log("Données reçues pour mise à jour:", propertyData);
       
       const property = await storage.updateProperty(req.user!.id, propertyData);
       res.json(property);
@@ -284,8 +299,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Propriété non trouvée" });
       }
       
-      // Enregistrer la photo et obtenir l'URL
+      // Vérifier si le fichier existe physiquement
       const photoUrl = `/uploads/${req.file.filename}`;
+      const fullPath = path.join(__dirname, "../public", photoUrl);
+      
+      console.log({
+        photoUrl,
+        fullPath,
+        exists: fs.existsSync(fullPath),
+        fileInfo: req.file
+      });
       
       // Ajouter l'URL de la photo à la propriété
       const updatedProperty = await storage.addPropertyPhoto(property.id, photoUrl);
@@ -296,30 +319,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Erreur lors de l'ajout de la photo" });
     }
   });
-  
+
   // Supprimer une photo de la propriété
-  app.delete("/api/property/photos", async (req, res) => {
+  app.delete("/api/property/photo", async (req, res) => {
     if (!req.isAuthenticated() || !req.user!.isLandlord) {
       return res.sendStatus(401);
     }
-    
-    const { photoUrl } = req.body;
+
+    const photoUrl = req.query.url as string;
     if (!photoUrl) {
       return res.status(400).json({ error: "URL de la photo non fournie" });
     }
-    
+
     try {
       // Récupérer la propriété du propriétaire
       const property = await storage.getProperty(req.user!.id);
       if (!property) {
         return res.status(404).json({ error: "Propriété non trouvée" });
       }
-      
-      // Supprimer la photo
+
+      // Supprimer le fichier physique
+      const filePath = path.join(__dirname, "..", "public", photoUrl);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+
+      // Supprimer l'URL de la photo de la propriété
       const updatedProperty = await storage.deletePropertyPhoto(property.id, photoUrl);
-      
-      // Supprimer le fichier du système de fichiers (optionnel)
-      // fs.unlinkSync(path.join(__dirname, "..", "public", photoUrl));
       
       res.json(updatedProperty);
     } catch (error) {
@@ -345,8 +371,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Propriété non trouvée" });
       }
       
-      // Enregistrer la photo et obtenir l'URL
+      // Construire l'URL de la photo
       const photoUrl = `/uploads/${req.file.filename}`;
+      const fullPath = path.join(__dirname, "../public", photoUrl);
+      
+      console.log({
+        photoUrl,
+        fullPath,
+        exists: fs.existsSync(fullPath),
+        fileInfo: req.file
+      });
       
       // Ajouter l'URL de la photo à la propriété
       const updatedProperty = await storage.addPropertyPhoto(property.id, photoUrl);
