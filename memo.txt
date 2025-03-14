@@ -4,3 +4,5 @@ un compteur des offre recu par une annonce
 
 
 espace configurable avec photo pour les pro
+
+location dans un perimetre

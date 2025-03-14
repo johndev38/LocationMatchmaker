@@ -7,7 +7,7 @@ import type {
   Message,
   Notification,
 } from "@shared/schema";
-import { users, rentalRequests, propertyOffers, messages, notifications } from "@shared/schema";
+import { users, rentalRequests, propertyOffers, messages, notifications, properties } from "@shared/schema";
 import { eq, and, or } from "drizzle-orm";
 import { db } from "./db";
 import session from "express-session";
@@ -284,6 +284,100 @@ export class DatabaseStorage implements IStorage {
     }
     
     return propertyOffer;
+  }
+
+  // Méthodes pour la gestion des propriétés
+  async getProperty(landlordId: number) {
+    const [property] = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.landlordId, landlordId));
+    
+    return property || null;
+  }
+
+  async createProperty(landlordId: number, propertyData: any) {
+    const [property] = await db
+      .insert(properties)
+      .values({
+        ...propertyData,
+        landlordId,
+        photos: propertyData.photos || [],
+        amenities: propertyData.amenities || [],
+      })
+      .returning();
+    
+    return property;
+  }
+
+  async updateProperty(landlordId: number, propertyData: any) {
+    const [existingProperty] = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.landlordId, landlordId));
+
+    if (!existingProperty) {
+      return this.createProperty(landlordId, propertyData);
+    }
+
+    const [property] = await db
+      .update(properties)
+      .set({
+        ...propertyData,
+        updatedAt: new Date(),
+      })
+      .where(eq(properties.landlordId, landlordId))
+      .returning();
+    
+    return property;
+  }
+
+  async addPropertyPhoto(propertyId: number, photoUrl: string) {
+    const [property] = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.id, propertyId));
+    
+    if (!property) {
+      throw new Error("Property not found");
+    }
+
+    const updatedPhotos = [...(property.photos || []), photoUrl];
+    
+    const [updatedProperty] = await db
+      .update(properties)
+      .set({
+        photos: updatedPhotos,
+        updatedAt: new Date(),
+      })
+      .where(eq(properties.id, propertyId))
+      .returning();
+    
+    return updatedProperty;
+  }
+
+  async deletePropertyPhoto(propertyId: number, photoUrl: string) {
+    const [property] = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.id, propertyId));
+    
+    if (!property) {
+      throw new Error("Property not found");
+    }
+
+    const updatedPhotos = (property.photos || []).filter(photo => photo !== photoUrl);
+    
+    const [updatedProperty] = await db
+      .update(properties)
+      .set({
+        photos: updatedPhotos,
+        updatedAt: new Date(),
+      })
+      .where(eq(properties.id, propertyId))
+      .returning();
+    
+    return updatedProperty;
   }
 }
 

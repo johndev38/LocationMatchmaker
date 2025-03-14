@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -10,6 +10,13 @@ export const users = pgTable("users", {
   address: text("address"),
   phone: text("phone"),
   email: text("email").notNull().unique(),
+});
+
+// Définition de la table sessions pour l'authentification
+export const sessions = pgTable("sessions", {
+  sid: text("sid").primaryKey(),
+  sess: text("sess").notNull(),
+  expire: timestamp("expire", { withTimezone: true }).notNull(),
 });
 
 export const rentalRequests = pgTable("rental_requests", {
@@ -37,6 +44,18 @@ export const propertyOffers = pgTable("property_offers", {
   description: text("description").notNull(),
   status: text("status").notNull().default("pending"),
   availableAmenities: text("available_amenities").array(),
+});
+
+export const properties = pgTable("properties", {
+  id: serial("id").primaryKey(),
+  landlordId: integer("landlord_id").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  address: text("address").notNull(),
+  photos: text("photos").array(),
+  amenities: text("amenities").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const messages = pgTable("messages", {
@@ -126,6 +145,20 @@ export const insertPropertyOfferSchema = createInsertSchema(propertyOffers).omit
   id: true,
   landlordId: true,
   status: true,
+});
+
+export const insertPropertySchema = createInsertSchema(properties).omit({
+  id: true,
+  landlordId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updatePropertySchema = createInsertSchema(properties).omit({
+  id: true,
+  landlordId: true,
+  createdAt: true, 
+  updatedAt: true,
 });
 
 export const insertMessageSchema = createInsertSchema(messages).omit({

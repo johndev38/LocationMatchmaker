@@ -6,6 +6,7 @@ import { insertRentalRequestSchema, insertPropertyOfferSchema, insertMessageSche
 import express from 'express';
 import { and, eq } from "drizzle-orm";
 import { db } from "./db";
+import { upload } from "./upload";
 
 const router = express.Router();
 
@@ -220,6 +221,140 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting rental request:", error);
       res.status(500).json({ error: "Erreur lors de la suppression de la demande" });
+    }
+  });
+
+  // Routes pour la gestion des propriétés
+  
+  // Récupérer la propriété du propriétaire connecté
+  app.get("/api/property", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user!.isLandlord) {
+      return res.sendStatus(401);
+    }
+    try {
+      const property = await storage.getProperty(req.user!.id);
+      if (!property) {
+        return res.status(404).json({ error: "Propriété non trouvée" });
+      }
+      res.json(property);
+    } catch (error) {
+      res.status(500).json({ error: "Erreur lors de la récupération de la propriété" });
+    }
+  });
+
+  // Créer ou mettre à jour une propriété
+  app.put("/api/property", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user!.isLandlord) {
+      return res.sendStatus(401);
+    }
+    
+    try {
+      const formData = req.body;
+      
+      // Extraire les données du formulaire
+      const propertyData = {
+        title: formData.title || "",
+        description: formData.description || "",
+        address: formData.address || "",
+        amenities: formData.amenities ? JSON.parse(formData.amenities) : [],
+      };
+      
+      const property = await storage.updateProperty(req.user!.id, propertyData);
+      res.json(property);
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour de la propriété:", error);
+      res.status(500).json({ error: "Erreur lors de la mise à jour de la propriété" });
+    }
+  });
+
+  // Ajouter une photo à la propriété
+  app.post("/api/property/photo", upload.single("photo"), async (req, res) => {
+    if (!req.isAuthenticated() || !req.user!.isLandlord) {
+      return res.sendStatus(401);
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: "Aucune photo fournie" });
+    }
+    
+    try {
+      // Récupérer la propriété du propriétaire
+      const property = await storage.getProperty(req.user!.id);
+      if (!property) {
+        return res.status(404).json({ error: "Propriété non trouvée" });
+      }
+      
+      // Enregistrer la photo et obtenir l'URL
+      const photoUrl = `/uploads/${req.file.filename}`;
+      
+      // Ajouter l'URL de la photo à la propriété
+      const updatedProperty = await storage.addPropertyPhoto(property.id, photoUrl);
+      
+      res.json(updatedProperty);
+    } catch (error) {
+      console.error("Erreur lors de l'ajout de la photo:", error);
+      res.status(500).json({ error: "Erreur lors de l'ajout de la photo" });
+    }
+  });
+  
+  // Supprimer une photo de la propriété
+  app.delete("/api/property/photos", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user!.isLandlord) {
+      return res.sendStatus(401);
+    }
+    
+    const { photoUrl } = req.body;
+    if (!photoUrl) {
+      return res.status(400).json({ error: "URL de la photo non fournie" });
+    }
+    
+    try {
+      // Récupérer la propriété du propriétaire
+      const property = await storage.getProperty(req.user!.id);
+      if (!property) {
+        return res.status(404).json({ error: "Propriété non trouvée" });
+      }
+      
+      // Supprimer la photo
+      const updatedProperty = await storage.deletePropertyPhoto(property.id, photoUrl);
+      
+      // Supprimer le fichier du système de fichiers (optionnel)
+      // fs.unlinkSync(path.join(__dirname, "..", "public", photoUrl));
+      
+      res.json(updatedProperty);
+    } catch (error) {
+      console.error("Erreur lors de la suppression de la photo:", error);
+      res.status(500).json({ error: "Erreur lors de la suppression de la photo" });
+    }
+  });
+
+  // Créer la route pour l'upload des photos via FormData (nouvelle méthode)
+  app.post("/api/property/upload-photo", upload.single("photo"), async (req, res) => {
+    if (!req.isAuthenticated() || !req.user!.isLandlord) {
+      return res.sendStatus(401);
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: "Aucune photo fournie" });
+    }
+    
+    try {
+      // Récupérer la propriété du propriétaire
+      const property = await storage.getProperty(req.user!.id);
+      if (!property) {
+        return res.status(404).json({ error: "Propriété non trouvée" });
+      }
+      
+      // Enregistrer la photo et obtenir l'URL
+      const photoUrl = `/uploads/${req.file.filename}`;
+      
+      // Ajouter l'URL de la photo à la propriété
+      const updatedProperty = await storage.addPropertyPhoto(property.id, photoUrl);
+      
+      res.json(updatedProperty);
+    } catch (error) {
+      console.error("Erreur lors de l'upload de la photo:", error);
+      res.status(500).json({ error: "Erreur lors de l'upload de la photo" });
     }
   });
 
