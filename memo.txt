@@ -1,3 +1,6 @@
 recupereration des annonces dont je propose mon logement
 
 un compteur des offre recu par une annonce
+
+
+espace configurable avec photo pour les pro

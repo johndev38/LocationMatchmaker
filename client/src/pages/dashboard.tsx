@@ -1,28 +1,35 @@
-import { useAuth } from "@/hooks/use-auth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Check, X } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import Header from "./header";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose,
+  DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { amenities } from "@shared/schema";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2, X } from "lucide-react";
+import { useState } from "react";
+import Header from "./header";
+
+type PropertyOffer = {
+  id: number;
+  requestId: number;
+  landlordId: number;
+  price: number;
+  description: string;
+  status: string;
+  availableAmenities?: string[];
+};
 
 type RentalRequest = {
   id: number;
@@ -167,6 +174,11 @@ export default function Dashboard() {
     },
   });
 
+  // Fonction pour vérifier si le propriétaire a déjà fait une offre pour une demande
+  const hasExistingOffer = (requestId: number) => {
+    return landlordOffers.some((offer: PropertyOffer) => offer.requestId === requestId);
+  };
+
   if (loadingRequests)
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -202,73 +214,80 @@ export default function Dashboard() {
             <section>
               <h2 className="text-2xl font-bold text-gray-800 mb-4">Demandes de location</h2>
               {rentalRequests.length > 0 ? (
-                rentalRequests.map((request: RentalRequest) => (
-                  <Card
-                    key={request.id}
-                    className={`mb-4 cursor-pointer transition-transform transform hover:scale-105 ${
-                      selectedRequest === request ? "border-2 border-pink-500" : ""
-                    }`}
-                  >
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold">Demande #{request.id}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div onClick={() => setSelectedRequest(request)}>
-                        <p className="text-gray-600">
-                          Ville de départ :{" "}
-                          <span className="font-semibold">{request.departureCity}</span>
-                        </p>
-                        <p className="text-gray-600">
-                          Période :{" "}
-                          <span className="font-semibold">
-                            {new Date(request.startDate).toLocaleDateString()} -{" "}
-                            {new Date(request.endDate).toLocaleDateString()}
-                          </span>
-                        </p>
-                        <p className="text-gray-600">
-                          Types de destination :{" "}
-                          <span className="font-semibold">
-                            {Array.isArray(request.locationType)
-                              ? request.locationType.join(", ")
-                              : request.locationType}
-                          </span>
-                        </p>
-                        <p className="text-gray-600">
-                          Distance maximale :{" "}
-                          <span className="font-semibold">{request.maxDistance} km</span>
-                        </p>
-                        <p className="text-gray-600">
-                          Budget :{" "}
-                          <span className="font-semibold">{request.maxBudget}€</span>
-                        </p>
-                        <p className="text-gray-600">
-                          Voyageurs :{" "}
-                          <span className="font-semibold">
-                            {request.adults} Adultes, {request.children} Enfants,{" "}
-                            {request.babies} Bébés, {request.pets} Animaux
-                          </span>
-                        </p>
-                      </div>
-                      
-                      {/* Bouton pour faire une offre (visible uniquement pour les propriétaires) */}
-                      {user?.isLandlord && (
-                        <div className="mt-4">
-                          <Button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openOfferDialog(request.id);
-                            }}
-                            className="w-full"
-                          >
-                            Faire une offre
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {rentalRequests.map((request: RentalRequest) => {
+                    const existingOffer = hasExistingOffer(request.id);
+                    return (
+                      <Card
+                        key={request.id}
+                        className={cn(
+                          "cursor-pointer transition-transform h-[280px] flex flex-col",
+                          existingOffer ? "opacity-50 pointer-events-none" : "hover:scale-105",
+                          selectedRequest === request ? "border-2 border-pink-500" : ""
+                        )}
+                      >
+                        <CardHeader className="p-3 flex-none">
+                          <div className="flex justify-between items-center">
+                            <CardTitle className="text-base font-semibold">
+                              {request.departureCity}
+                              {existingOffer && (
+                                <span className="ml-2 text-xs text-gray-500">(Offre envoyée)</span>
+                              )}
+                            </CardTitle>
+                            <span className="text-sm text-gray-500">
+                              {new Date(request.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - {new Date(request.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                            </span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3 flex-grow">
+                          <div onClick={() => !existingOffer && setSelectedRequest(request)} className="grid grid-cols-1 gap-2 text-sm">
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-500">Type :</span>
+                              <span className="font-medium">{Array.isArray(request.locationType) ? request.locationType.join(", ") : request.locationType}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-500">Distance :</span>
+                              <span className="font-medium">{request.maxDistance} km</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-500">Budget :</span>
+                              <span className="font-medium">{request.maxBudget}€</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-500">Voyageurs :</span>
+                              <span className="font-medium">
+                                {request.adults + request.children + request.babies} pers.
+                                {request.pets > 0 && `, ${request.pets} animaux`}
+                              </span>
+                            </div>
+                            {request.amenities && request.amenities.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {request.amenities.map((amenity) => (
+                                  <span key={amenity} className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">
+                                    {amenity.replace(/_/g, " ")}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                        {!existingOffer && (
+                          <CardFooter className="p-3 flex-none">
+                            <Button
+                              onClick={() => openOfferDialog(request.id)}
+                              className="w-full h-8 text-sm"
+                              size="sm"
+                            >
+                              Faire une offre
+                            </Button>
+                          </CardFooter>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </div>
               ) : (
-                <p className="text-gray-500">Aucune demande pour le moment.</p>
+                <p className="text-gray-500">Aucune demande de location disponible.</p>
               )}
             </section>
 

@@ -24,24 +24,26 @@ export default function Header() {
             <Button variant="ghost">Recherche</Button>
           </Link> */}
           {!user?.isLandlord && (
-            <Link to="/create-request" className="transition hover:text-pink-500">
-              <Button variant="ghost">Publier une annonce</Button>
-            </Link>
+            <>
+              <Link to="/create-request" className="transition hover:text-pink-500">
+                <Button variant="ghost">Publier une annonce</Button>
+              </Link>
+              {user && (
+                <Link to="/my-listings" className="transition hover:text-pink-500">
+                  <Button variant="ghost">Mes annonces</Button>
+                </Link>
+              )}
+            </>
           )}
           {user?.isLandlord && (
             <>
               <Link to="/dashboard" className="transition hover:text-pink-500">
-                <Button variant="ghost">Espace professionnel</Button>
+                <Button variant="ghost">Rechercher un locataire</Button>
               </Link>
               <Link to="/landlord-offers" className="transition hover:text-pink-500">
-                <Button variant="ghost">Mes offres</Button>
+                <Button variant="ghost">Mes offres en cours</Button>
               </Link>
             </>
-          )}
-          {user && (
-            <Link to="/my-listings" className="transition hover:text-pink-500">
-              <Button variant="ghost">Mes annonces</Button>
-            </Link>
           )}
           {user ? (
             <>
