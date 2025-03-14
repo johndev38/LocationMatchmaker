@@ -243,14 +243,13 @@ export default function CreateRentalRequest() {
   const getMissingFields = () => {
     console.log("form.formState.isValid", form.formState.isValid);
     console.log("selectedTypes", selectedTypes);
+    console.log("Dates valides:", form.getValues("startDate") && form.getValues("endDate"));
     const errors = form.formState.errors;
     const missingFields = [];
     if (!form.getValues("departureCity")) missingFields.push("Ville de départ");
-    if (!form.getValues("maxDistance"))
-      missingFields.push("Distance maximale");
+    if (!form.getValues("maxDistance")) missingFields.push("Distance maximale");
     if (!form.getValues("maxBudget")) missingFields.push("Budget maximum");
-    if (selectedTypes.length === 0)
-      missingFields.push("Types de destination");
+    if (selectedTypes.length === 0) missingFields.push("Types de destination");
     return missingFields;
   };
 
@@ -258,12 +257,24 @@ export default function CreateRentalRequest() {
     const subscription = form.watch((values: any) => {
       console.log("Valeurs actuelles du formulaire:", values);
       console.log("Erreurs de validation:", form.formState.errors);
+      
+      // Forcer la mise à jour du formulaire pour prendre en compte toutes les valeurs
+      if (values.departureCity && selectedTypes.length > 0 && values.maxBudget && 
+          values.startDate && values.endDate) {
+        form.trigger();
+      }
     });
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, selectedTypes]);
 
   const handleSubmitForm = (data: any) => {
-    if (!isFormValid) {
+    // Même si le formulaire n'est pas valide selon isFormValid, on essaie de soumettre
+    // si toutes les valeurs requises sont présentes
+    const hasRequiredFields = form.getValues("departureCity") && selectedTypes.length > 0 && 
+                              form.getValues("maxBudget") && form.getValues("startDate") && 
+                              form.getValues("endDate");
+                              
+    if (!hasRequiredFields) {
       toast({
         title: "Erreur",
         description: "Veuillez remplir tous les champs obligatoires.",
@@ -272,6 +283,9 @@ export default function CreateRentalRequest() {
       return;
     }
 
+    // Mise à jour des champs
+    data.locationType = selectedTypes;
+    console.log("Données soumises:", data);
     createRequestMutation.mutate(data);
   };
 
@@ -551,7 +565,7 @@ export default function CreateRentalRequest() {
                 type="submit"
                 className="w-full py-3 mt-4 text-lg rounded-md font-semibold transition duration-150"
                 style={buttonPrimaryStyle}
-                disabled={!isFormValid || createRequestMutation.isPending}
+                disabled={createRequestMutation.isPending}
                 onMouseDown={(e) => {
                   e.currentTarget.style.transform =
                     buttonActiveStyle.transform || "";

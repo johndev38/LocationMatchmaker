@@ -15,6 +15,7 @@ import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 import { pgTable, serial, text, integer, boolean, unique } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { sql } from "drizzle-orm";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -60,11 +61,12 @@ export class DatabaseStorage implements IStorage {
         babies: request.babies,
         pets: request.pets,
         departureCity: request.departureCity,
-        locationType: request.locationType,
+        locationType: sql.raw(`ARRAY[${request.locationType.map(t => `'${t}'`).join(',')}]::text[]`),
         maxDistance: request.maxDistance,
         maxBudget: request.maxBudget,
         startDate: request.startDate,
         endDate: request.endDate,
+        amenities: sql.raw(`ARRAY[${(request.amenities || []).map(a => `'${a}'`).join(',')}]::text[]`),
       })
       .returning();
     return rentalRequest;

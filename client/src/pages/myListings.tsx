@@ -158,6 +158,22 @@ export default function MyListings() {
                         <p className="text-sm text-gray-500">Distance max</p>
                         <p>{listing.maxDistance} km</p>
                       </div>
+                      {listing.amenities && listing.amenities.length > 0 && (
+                        <div className="col-span-2 mt-2">
+                          <p className="text-sm text-gray-500 mb-2">Prestations souhaitées</p>
+                          <div className="flex flex-wrap gap-2">
+                            {listing.amenities.map((amenity: string) => (
+                              <Badge 
+                                key={amenity}
+                                variant="secondary"
+                                className="capitalize"
+                              >
+                                {amenity.replace(/_/g, " ")}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                   <CardFooter className="flex justify-between">
