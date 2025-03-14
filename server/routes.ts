@@ -2,8 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertRentalRequestSchema, insertPropertyOfferSchema, insertMessageSchema } from "@shared/schema";
+import { insertRentalRequestSchema, insertPropertyOfferSchema, insertMessageSchema, rentalRequests } from "@shared/schema";
 import express from 'express';
+import { and, eq } from "drizzle-orm";
+import { db } from "./db";
 
 const router = express.Router();
 
@@ -27,6 +29,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData,
         startDate: validatedData.startDate.toISOString(),
         endDate: validatedData.endDate.toISOString(),
+        amenities: validatedData.amenities || null,
       });
 
       console.log("request", request);
@@ -50,7 +53,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const validatedData = insertPropertyOfferSchema.parse(req.body);
-      const offer = await storage.createPropertyOfferWithNotification(req.user!.id, validatedData);
+      const offer = await storage.createPropertyOfferWithNotification(req.user!.id, {
+        ...validatedData,
+        availableAmenities: validatedData.availableAmenities || null,
+      });
       res.status(201).json(offer);
     } catch (error) {
       res.status(400).json({ error: "Invalid offer data" });
@@ -193,6 +199,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Erreur lors de la mise à jour des notifications" });
+    }
+  });
+
+  // Route pour supprimer une demande de location
+  app.delete("/api/rental-requests/:requestId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const requestId = parseInt(req.params.requestId);
+      // Suppression directe sans passer par storage.deleteRentalRequest
+      await db
+        .delete(rentalRequests)
+        .where(and(
+          eq(rentalRequests.id, requestId),
+          eq(rentalRequests.userId, req.user!.id)
+        ));
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting rental request:", error);
+      res.status(500).json({ error: "Erreur lors de la suppression de la demande" });
     }
   });
 

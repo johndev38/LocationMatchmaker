@@ -1,5 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Check, X } from "lucide-react";
@@ -20,10 +21,29 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { amenities } from "@shared/schema";
+import { Checkbox } from "@/components/ui/checkbox";
+
+type RentalRequest = {
+  id: number;
+  userId: number;
+  departureCity: string;
+  locationType: string[];
+  maxDistance: number;
+  adults: number;
+  children: number;
+  babies: number;
+  pets: number;
+  maxBudget: number;
+  startDate: string;
+  endDate: string;
+  status: string;
+  amenities: string[];
+};
 
 export default function Dashboard() {
   const { user, logoutMutation } = useAuth();
-  const [selectedRequest, setSelectedRequest] = useState<number | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<RentalRequest | null>(null);
   const [offerDialogOpen, setOfferDialogOpen] = useState(false);
   const [offerPrice, setOfferPrice] = useState("");
   const [offerDescription, setOfferDescription] = useState("");
@@ -31,14 +51,13 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("requests");
+  const [availableAmenities, setAvailableAmenities] = useState<string[]>([]);
 
-  const { data: rentalRequests = [], isLoading: loadingRequests } = useQuery<any[]>({
-    queryKey: ["rentalRequests"],
+  const { data: rentalRequests = [], isLoading: loadingRequests } = useQuery<RentalRequest[]>({
+    queryKey: ["/api/rental-requests"],
     queryFn: async () => {
-      const response = await fetch("/api/rental-requests");
-      if (!response.ok)
-        throw new Error("Erreur lors de la récupération des demandes de location");
-      return response.json();
+      const res = await apiRequest("GET", "/api/rental-requests");
+      return await res.json();
     },
   });
 
@@ -47,7 +66,7 @@ export default function Dashboard() {
     enabled: selectedRequest !== null,
     queryFn: async () => {
       if (selectedRequest === null) return [];
-      const response = await fetch(`/api/property-offers/${selectedRequest}`);
+      const response = await fetch(`/api/property-offers/${selectedRequest.id}`);
       if (!response.ok)
         throw new Error("Erreur lors de la récupération des offres");
       return response.json();
@@ -183,18 +202,18 @@ export default function Dashboard() {
             <section>
               <h2 className="text-2xl font-bold text-gray-800 mb-4">Demandes de location</h2>
               {rentalRequests.length > 0 ? (
-                rentalRequests.map((request: any) => (
+                rentalRequests.map((request: RentalRequest) => (
                   <Card
                     key={request.id}
                     className={`mb-4 cursor-pointer transition-transform transform hover:scale-105 ${
-                      selectedRequest === request.id ? "border-2 border-pink-500" : ""
+                      selectedRequest === request ? "border-2 border-pink-500" : ""
                     }`}
                   >
                     <CardHeader>
                       <CardTitle className="text-lg font-semibold">Demande #{request.id}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div onClick={() => setSelectedRequest(request.id)}>
+                      <div onClick={() => setSelectedRequest(request)}>
                         <p className="text-gray-600">
                           Ville de départ :{" "}
                           <span className="font-semibold">{request.departureCity}</span>
@@ -363,45 +382,72 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="offer-price" className="text-right">
-                Prix (€)
-              </Label>
-              <Input
-                id="offer-price"
-                type="number"
-                value={offerPrice}
-                onChange={(e) => setOfferPrice(e.target.value)}
-                className="col-span-3"
-                placeholder="Entrez votre prix"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="offer-description" className="text-right">
-                Description
-              </Label>
-              <Textarea
-                id="offer-description"
-                value={offerDescription}
-                onChange={(e) => setOfferDescription(e.target.value)}
-                className="col-span-3"
-                placeholder="Décrivez votre offre"
-                rows={4}
-              />
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="price">Prix proposé (€)</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  value={offerPrice}
+                  onChange={(e) => setOfferPrice(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description de votre offre</Label>
+                <Textarea
+                  id="description"
+                  value={offerDescription}
+                  onChange={(e) => setOfferDescription(e.target.value)}
+                  rows={4}
+                />
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium mb-3">Prestations disponibles</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {selectedRequest?.amenities?.map((amenity: string) => (
+                    <div key={amenity} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`amenity-${amenity}`}
+                        checked={availableAmenities.includes(amenity)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setAvailableAmenities([...availableAmenities, amenity]);
+                          } else {
+                            setAvailableAmenities(
+                              availableAmenities.filter((a) => a !== amenity)
+                            );
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`amenity-${amenity}`}
+                        className="capitalize cursor-pointer"
+                      >
+                        {amenity.replace(/_/g, " ")}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={createOfferMutation.isPending}
+              >
+                {createOfferMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Envoi en cours...
+                  </>
+                ) : (
+                  "Envoyer l'offre"
+                )}
+              </Button>
             </div>
           </div>
-          <DialogFooter>
-            <Button 
-              type="submit" 
-              onClick={handleCreateOffer}
-              disabled={createOfferMutation.isPending}
-            >
-              {createOfferMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Envoyer l'offre
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

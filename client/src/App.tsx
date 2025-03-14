@@ -12,6 +12,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import FindRental from "./pages/findRental";
 import MyListings from "./pages/myListings";
 import MyInformation from "./pages/MyInformation";
+import LandlordOffers from "./pages/landlord-offers";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
               <Route path="/my-listings" element={<MyListings />} />
               <Route path="/create-request" element={<CreateRentalRequest />} />
               <Route path="/profile" element={<MyInformation />} />
+              <Route path="/landlord-offers" element={<LandlordOffers />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

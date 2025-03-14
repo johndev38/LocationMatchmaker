@@ -4,7 +4,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   insertRentalRequestSchema,
   locationTypes,
+  amenities,
 } from "@shared/schema";
+import type { RentalRequest } from "@shared/schema";
 import {
   Form,
   FormControl,
@@ -45,6 +47,14 @@ import { useNavigate } from "react-router-dom";
 import Header from "./header";
 import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
 import GuestSelector from "@/lib/GuestSelector";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { CalendarIcon } from "lucide-react";
 // import ProfileTab from "./ProfileTab";
 
 /* 
@@ -145,19 +155,18 @@ export default function CreateRentalRequest() {
     libraries,
   });
 
-  const form = useForm({
+  const form = useForm<RentalRequest>({
     resolver: zodResolver(insertRentalRequestSchema),
     defaultValues: {
       departureCity: "",
       locationType: [],
-      maxDistance: 100,
+      maxDistance: 50,
       adults: 1,
       children: 0,
       babies: 0,
       pets: 0,
       maxBudget: 1000,
-      startDate: new Date(),
-      endDate: new Date(),
+      amenities: [], // Valeur par défaut pour les prestations
     },
   });
 
@@ -165,28 +174,18 @@ export default function CreateRentalRequest() {
   const { adults, children, babies, pets } = form.watch();
 
   const createRequestMutation = useMutation({
-    mutationFn: async (data: any) => {
-      console.log("data", data);
+    mutationFn: async (data: RentalRequest) => {
       const res = await apiRequest("POST", "/api/rental-requests", data);
-      return res.json();
+      return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["rentalRequests"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["propertyOffers"],
-      });
       toast({
-        title: "Succès",
-        description: "Votre demande de location a été créée.",
+        title: "Demande créée",
+        description: "Votre demande de location a été créée avec succès.",
       });
-      form.reset();
-      setSelectedTypes([]);
-      navigate("/");
+      navigate("/my-listings");
     },
     onError: (error: Error) => {
-      console.error("Erreur lors de la création de la demande:", error);
       toast({
         title: "Erreur",
         description: error.message,
@@ -256,7 +255,7 @@ export default function CreateRentalRequest() {
   };
 
   useEffect(() => {
-    const subscription = form.watch((values) => {
+    const subscription = form.watch((values: any) => {
       console.log("Valeurs actuelles du formulaire:", values);
       console.log("Erreurs de validation:", form.formState.errors);
     });
@@ -273,10 +272,7 @@ export default function CreateRentalRequest() {
       return;
     }
 
-    createRequestMutation.mutate({
-      ...data,
-      locationType: selectedTypes,
-    });
+    createRequestMutation.mutate(data);
   };
 
   const updateCount = (
@@ -291,26 +287,23 @@ export default function CreateRentalRequest() {
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50">
       <Header />
       {/* <ProfileTab /> */}
       <div style={containerStyle}>
         <div className="pt-20">
           <h2 style={headingStyle}>Créer une demande de location</h2>
           <Form {...form}>
-
-
-          <GuestSelector
-                adults={adults}
-                onAdultsChange={(val: number) => form.setValue("adults", val)}
-                children={children}
-                onChildrenChange={(val: number) => form.setValue("children", val)}
-                babies={babies}
-                onBabiesChange={(val: number) => form.setValue("babies", val)}
-                pets={pets}
-                onPetsChange={(val) => form.setValue("pets", val)}
-              />
-
+            <GuestSelector
+              adults={adults}
+              onAdultsChange={(val: number) => form.setValue("adults", val)}
+              children={children}
+              onChildrenChange={(val: number) => form.setValue("children", val)}
+              babies={babies}
+              onBabiesChange={(val: number) => form.setValue("babies", val)}
+              pets={pets}
+              onPetsChange={(val) => form.setValue("pets", val)}
+            />
 
             <form onSubmit={form.handleSubmit(handleSubmitForm)}>
               <FormItem>
@@ -422,10 +415,7 @@ export default function CreateRentalRequest() {
                                 ? selectedTypes.filter((t) => t !== type)
                                 : [...selectedTypes, type];
                               setSelectedTypes(newTypes);
-                              form.setValue(
-                                "locationType",
-                                newTypes as never
-                              );
+                              form.setValue("locationType", newTypes);
                             }}
                             style={{
                               ...(isSelected
@@ -468,7 +458,6 @@ export default function CreateRentalRequest() {
                 )}
               />
 
- 
               <FormField
                 control={form.control}
                 name="maxBudget"
@@ -491,8 +480,75 @@ export default function CreateRentalRequest() {
                 )}
               />
 
+              {/* Section des prestations souhaitées */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Prestations souhaitées</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {amenities.map((amenity) => (
+                    <div key={amenity} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`amenity-${amenity}`}
+                        checked={form.watch("amenities")?.includes(amenity)}
+                        onCheckedChange={(checked) => {
+                          const currentAmenities = form.watch("amenities") || [];
+                          if (checked) {
+                            form.setValue("amenities", [...currentAmenities, amenity]);
+                          } else {
+                            form.setValue(
+                              "amenities",
+                              currentAmenities.filter((a: string) => a !== amenity)
+                            );
+                          }
+                        }}
+                      /> 
+                      <Label
+                        htmlFor={`amenity-${amenity}`}
+                        className="capitalize cursor-pointer"
+                      >
+                        {amenity.replace(/_/g, " ")}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 mb-2 p-2 bg-gray-100 rounded">
+                <p className="font-bold">État du formulaire :</p>
+                <p>isFormValid: {String(isFormValid)}</p>
+                <p>form.formState.isValid: {String(form.formState.isValid)}</p>
+                <p>form.formState.errors: {JSON.stringify(form.formState.errors)}</p>
+                <p>selectedTypes: {selectedTypes.join(", ")}</p>
+                <p>Erreurs : {JSON.stringify(form.formState.errors)}</p>
+                <div className="mt-2">
+                  <p className="font-bold">Valeurs actuelles :</p>
+                  <pre className="text-xs mt-1 bg-white p-2 rounded">
+                    {JSON.stringify({
+                      departureCity: form.getValues("departureCity"),
+                      locationType: form.getValues("locationType"),
+                      maxDistance: form.getValues("maxDistance"),
+                      adults: form.getValues("adults"),
+                      children: form.getValues("children"),
+                      babies: form.getValues("babies"),
+                      pets: form.getValues("pets"),
+                      maxBudget: form.getValues("maxBudget"),
+                      startDate: form.getValues("startDate"),
+                      endDate: form.getValues("endDate"),
+                      amenities: form.getValues("amenities"),
+                    }, null, 2)}
+                  </pre>
+                </div>
+                <div className="mt-4">
+                  <p className="font-bold">Champs manquants :</p>
+                  <ul className="list-disc pl-4">
+                    {getMissingFields().map((field, index) => (
+                      <li key={index} className="text-red-500">{field}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
               <Button
-                type="submit" // Assurez-vous que le type est bien "submit"
+                type="submit"
                 className="w-full py-3 mt-4 text-lg rounded-md font-semibold transition duration-150"
                 style={buttonPrimaryStyle}
                 disabled={!isFormValid || createRequestMutation.isPending}

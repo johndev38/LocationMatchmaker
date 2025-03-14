@@ -26,6 +26,7 @@ export const rentalRequests = pgTable("rental_requests", {
   startDate: text("start_date").notNull(),
   endDate: text("end_date").notNull(),
   status: text("status").notNull().default("active"),
+  amenities: text("amenities").array(),
 });
 
 export const propertyOffers = pgTable("property_offers", {
@@ -35,6 +36,7 @@ export const propertyOffers = pgTable("property_offers", {
   price: integer("price").notNull(),
   description: text("description").notNull(),
   status: text("status").notNull().default("pending"),
+  availableAmenities: text("available_amenities").array(),
 });
 
 export const messages = pgTable("messages", {
@@ -74,6 +76,32 @@ export const locationTypes = [
   "forêt",
 ] as const;
 
+export const amenities = [
+  "climatisation",
+  "piscine",
+  "vue_mer",
+  "vue_montagne",
+  "calme",
+  "jardin",
+  "terrasse",
+  "parking",
+  "wifi",
+  "television",
+  "lave_linge",
+  "lave_vaisselle",
+  "barbecue",
+  "jacuzzi",
+  "sauna",
+  "salle_sport",
+  "ascenseur",
+  "accessible_handicap",
+  "animaux_acceptes",
+  "proche_commerces",
+  "proche_transports",
+  "proche_plage",
+  "proche_ski",
+] as const;
+
 export const insertRentalRequestSchema = createInsertSchema(rentalRequests)
   .omit({
     id: true,
@@ -91,6 +119,7 @@ export const insertRentalRequestSchema = createInsertSchema(rentalRequests)
     maxBudget: z.number().min(1, "Le budget maximum doit être supérieur à 0"),
     startDate: z.date(),
     endDate: z.date().refine(date => date >= new Date(), "La date de fin doit être dans le futur"),
+    amenities: z.array(z.enum(amenities)).optional(),
   });
 
 export const insertPropertyOfferSchema = createInsertSchema(propertyOffers).omit({

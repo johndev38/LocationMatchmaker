@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function MyListings() {
   const { user } = useAuth();
@@ -19,7 +20,7 @@ export default function MyListings() {
   const { data: userListings = [], isLoading: loadingListings } = useQuery({
     queryKey: ["userListings"],
     queryFn: async () => {
-      const response = await fetch("/api/my-listings");
+      const response = await apiRequest("GET", "/api/my-listings");
       if (!response.ok) throw new Error("Erreur lors de la récupération des annonces");
       return response.json();
     },
@@ -30,7 +31,7 @@ export default function MyListings() {
   const { data: propertyOffers = [], isLoading: loadingOffers } = useQuery({
     queryKey: ["propertyOffers", selectedRequest],
     queryFn: async () => {
-      const response = await fetch(`/api/property-offers/${selectedRequest}`);
+      const response = await apiRequest("GET", `/api/property-offers/${selectedRequest}`);
       if (!response.ok) throw new Error("Erreur lors de la récupération des offres");
       return response.json();
     },
@@ -40,12 +41,8 @@ export default function MyListings() {
   // Mutation pour mettre à jour le statut d'une offre
   const updateOfferStatusMutation = useMutation({
     mutationFn: async ({ offerId, status }: { offerId: number; status: string }) => {
-      const response = await fetch(`/api/property-offers/${offerId}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status }),
+      const response = await apiRequest("PUT", `/api/property-offers/${offerId}/status`, {
+        status,
       });
       if (!response.ok) throw new Error("Erreur lors de la mise à jour du statut de l'offre");
       return response.json();
@@ -57,16 +54,26 @@ export default function MyListings() {
         description: "Le statut de l'offre a été mis à jour avec succès",
       });
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour l'offre : " + error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Mutation pour supprimer une demande
   const deleteRequestMutation = useMutation({
     mutationFn: async (requestId: number) => {
-      const response = await fetch(`/api/rental-requests/${requestId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Erreur lors de la suppression de la demande");
-      return response.json();
+      const response = await apiRequest("DELETE", `/api/rental-requests/${requestId}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Réponse du serveur:", errorText);
+        throw new Error("Erreur lors de la suppression de la demande");
+      }
+      // Pour une suppression, on ne s'attend pas forcément à recevoir du JSON
+      return true;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["userListings"] });
@@ -74,6 +81,13 @@ export default function MyListings() {
       toast({
         title: "Demande supprimée",
         description: "Votre demande a été supprimée avec succès",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer la demande : " + error.message,
+        variant: "destructive",
       });
     },
   });
@@ -159,6 +173,7 @@ export default function MyListings() {
                       size="sm"
                       onClick={() => {
                         if (confirm("Êtes-vous sûr de vouloir supprimer cette demande ?")) {
+                          console.log("Suppression de la demande", listing.id);
                           deleteRequestMutation.mutate(listing.id);
                         }
                       }}
@@ -203,15 +218,35 @@ export default function MyListings() {
                         </div>
                       </CardHeader>
                       <CardContent>
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="space-y-4">
                           <div>
                             <p className="text-sm text-gray-500">Prix proposé</p>
-                            <p className="font-semibold">{offer.price} €</p>
+                            <p className="font-semibold text-xl">{offer.price} €</p>
                           </div>
                           <div>
                             <p className="text-sm text-gray-500">Description</p>
-                            <p>{offer.description}</p>
+                            <p className="text-gray-700">{offer.description}</p>
                           </div>
+                          {offer.availableAmenities && offer.availableAmenities.length > 0 && (
+                            <div>
+                              <p className="text-sm text-gray-500 mb-2">Prestations disponibles</p>
+                              <div className="flex flex-wrap gap-2">
+                                {offer.availableAmenities.map((amenity: string) => (
+                                  <Badge 
+                                    key={amenity} 
+                                    variant="secondary"
+                                    className={`capitalize ${
+                                      offer.request?.amenities?.includes(amenity) 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-gray-100 text-gray-800'
+                                    }`}
+                                  >
+                                    {amenity.replace(/_/g, " ")}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                       {offer.status === "pending" && (

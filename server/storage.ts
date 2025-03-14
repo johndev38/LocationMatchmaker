@@ -13,6 +13,8 @@ import { db } from "./db";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
+import { pgTable, serial, text, integer, boolean, unique } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/node-postgres";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -134,7 +136,12 @@ export class DatabaseStorage implements IStorage {
   async deleteRentalRequest(requestId: number, userId: number): Promise<void> {
     await db
       .delete(rentalRequests)
-      .where(eq(rentalRequests.id, requestId) && eq(rentalRequests.userId, userId));
+      .where(
+        and(
+          eq(rentalRequests.id, requestId),
+          eq(rentalRequests.userId, userId)
+        )
+      );
   }
 
   async updateUser(id: number, data: { name: string; email: string; address: string; phone: string }): Promise<User> {

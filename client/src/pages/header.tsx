@@ -29,9 +29,14 @@ export default function Header() {
             </Link>
           )}
           {user?.isLandlord && (
-            <Link to="/dashboard" className="transition hover:text-pink-500">
-              <Button variant="ghost">Espace professionnel</Button>
-            </Link>
+            <>
+              <Link to="/dashboard" className="transition hover:text-pink-500">
+                <Button variant="ghost">Espace professionnel</Button>
+              </Link>
+              <Link to="/landlord-offers" className="transition hover:text-pink-500">
+                <Button variant="ghost">Mes offres</Button>
+              </Link>
+            </>
           )}
           {user && (
             <Link to="/my-listings" className="transition hover:text-pink-500">
