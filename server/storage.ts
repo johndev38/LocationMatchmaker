@@ -99,11 +99,40 @@ export class DatabaseStorage implements IStorage {
     return propertyOffer;
   }
 
-  async getPropertyOffers(requestId: number): Promise<PropertyOffer[]> {
-    return await db
+  async getPropertyOffers(requestId: number): Promise<any[]> {
+    // Récupérer les offres pour cette demande
+    const offers = await db
       .select()
       .from(propertyOffers)
       .where(eq(propertyOffers.requestId, requestId));
+    
+    // Pour chaque offre, récupérer les informations de la propriété du propriétaire
+    const offersWithProperties = await Promise.all(
+      offers.map(async (offer) => {
+        // Récupérer la propriété du propriétaire
+        const [property] = await db
+          .select()
+          .from(properties)
+          .where(eq(properties.landlordId, offer.landlordId));
+        
+        if (!property) {
+          return offer;
+        }
+        
+        // Combiner l'offre avec les détails de la propriété
+        return {
+          ...offer,
+          property: {
+            title: property.title,
+            address: property.address,
+            photos: property.photos,
+            amenities: property.amenities
+          }
+        };
+      })
+    );
+    
+    return offersWithProperties;
   }
 
   async createMessage(
