@@ -10,11 +10,12 @@ import {
   Loader2, Plus, X, Wifi, Tv, Car, Home, UtensilsCrossed, Trees, Waves, Droplets,
   WashingMachine, Bath, Bed, DoorOpen, Fan, Footprints, Gamepad2, Key, Laptop,
   Microwave, Mountain, ParkingCircle, Shirt, Snowflake, Sofa, Sun, Thermometer,
-  Dumbbell, Baby, Dog, Coffee, Cigarette, ShowerHead
+  Dumbbell, Baby, Dog, Coffee, Cigarette, ShowerHead, MapPin
 } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useJsApiLoader, Autocomplete } from "@react-google-maps/api";
 
 type Property = {
   id: number;
@@ -23,6 +24,7 @@ type Property = {
   address: string;
   photos: string[];
   amenities: string[];
+  coordinates?: { lat: number; lng: number };
 };
 
 // Type pour les photos à prévisualiser
@@ -35,6 +37,7 @@ export default function MyProperty() {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -42,6 +45,35 @@ export default function MyProperty() {
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [pendingPhotos, setPendingPhotos] = useState<PreviewPhoto[]>([]);
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const [coordinates, setCoordinates] = useState<{lat: number; lng: number} | null>(null);
+
+  // Configuration de l'API Google Maps
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
+    libraries: ["places"],
+  });
+
+  // Gestion de la sélection d'adresse via Google Places
+  const handlePlaceChanged = () => {
+    if (autocomplete) {
+      const place = autocomplete.getPlace();
+      if (place.geometry) {
+        const location = place.geometry.location;
+        setCoordinates({
+          lat: location?.lat() || 0,
+          lng: location?.lng() || 0,
+        });
+        setAddress(place.formatted_address || "");
+      } else {
+        toast({
+          title: "Erreur",
+          description: "Impossible de trouver l'adresse.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   const amenitiesList = [
     // Vue et Localisation
@@ -115,6 +147,10 @@ export default function MyProperty() {
       setDescription(data.description || "");
       setAddress(data.address || "");
       setSelectedAmenities(data.amenities || []);
+      // Initialiser les coordonnées si elles existent
+      if (data.coordinates) {
+        setCoordinates(data.coordinates);
+      }
       return data;
     },
     enabled: user?.isLandlord,
@@ -129,11 +165,20 @@ export default function MyProperty() {
   }, [pendingPhotos]);
 
   const updatePropertyMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const response = await apiRequest("PUT", "/api/property", formData);
-      if (!response.ok)
-        throw new Error("Erreur lors de la mise à jour du bien");
-      return response.json();
+    mutationFn: async (propertyData: any) => {
+      // Si c'est un FormData, l'envoyer directement
+      if (propertyData instanceof FormData) {
+        const response = await apiRequest("PUT", "/api/property", propertyData);
+        if (!response.ok)
+          throw new Error("Erreur lors de la mise à jour du bien");
+        return response.json();
+      } else {
+        // Sinon, envoyer comme JSON
+        const response = await apiRequest("PUT", "/api/property", propertyData);
+        if (!response.ok)
+          throw new Error("Erreur lors de la mise à jour du bien");
+        return response.json();
+      }
     },
     onSuccess: () => {
       toast({
@@ -239,6 +284,16 @@ export default function MyProperty() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Vérifier que l'adresse est valide (coordonnées définies)
+    if (!coordinates && address.trim() !== "") {
+      toast({
+        title: "Adresse invalide",
+        description: "Veuillez sélectionner une adresse valide depuis les suggestions",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       setUploadingPhotos(true);
   
@@ -247,70 +302,26 @@ export default function MyProperty() {
         title,
         description,
         address,
-        amenities: selectedAmenities
+        amenities: selectedAmenities,
+        coordinates: coordinates
       };
-  
-      // Mise à jour des informations de base
-      const basicInfoResponse = await apiRequest("PUT", "/api/property", propertyData);
       
-      if (!basicInfoResponse.ok) {
-        const errorText = await basicInfoResponse.text();
-        console.error("Erreur response:", errorText);
-        throw new Error(`Erreur lors de la mise à jour des informations: ${errorText.slice(0, 100)}...`);
-      }
-      
-      // 2. Si les photos sont disponibles, traitement avec une méthode simplifiée
       if (pendingPhotos.length > 0) {
-        try {
-          const propertyData = await basicInfoResponse.json();
-          
-          // Upload des photos une par une
-          for (let i = 0; i < pendingPhotos.length; i++) {
-            const photoData = new FormData();
-            photoData.append("propertyId", propertyData.id.toString());
-            photoData.append("photo", pendingPhotos[i].file);
-            
-            const photoResponse = await fetch("/api/property/upload-photo", {
-              method: "POST",
-              body: photoData,
-              credentials: "include"
-            });
-            
-            if (!photoResponse.ok) {
-              console.error(`Erreur lors de l'upload de la photo ${i+1}:`, await photoResponse.text());
-            }
-          }
-        } catch (photoErr) {
-          console.error("Erreur pendant l'upload des photos:", photoErr);
-          toast({
-            title: "Attention",
-            description: "Les informations ont été mises à jour mais l'upload des photos a échoué",
-            variant: "destructive",
-          });
-        }
+        // Créer un FormData pour les photos et les données
+        const formData = new FormData();
+        formData.append('data', JSON.stringify(propertyData));
+        
+        // Ajouter les nouvelles photos
+        pendingPhotos.forEach(photo => {
+          formData.append('photos', photo.file);
+        });
+        
+        await updatePropertyMutation.mutate(formData);
+      } else {
+        // Pas de nouvelles photos, envoyer directement les données JSON
+        await updatePropertyMutation.mutate(propertyData);
       }
-      
-      // 3. Succès final
-      toast({
-        title: "Succès",
-        description: "Les informations de votre bien ont été mises à jour",
-      });
-      
-      setIsEditing(false);
-      setPendingPhotos([]); // Vider les photos en attente
-      
-      // Rafraîchir les données sans recharger toute la page
-      const refreshResponse = await apiRequest("GET", "/api/property");
-      if (refreshResponse.ok) {
-        const refreshedData = await refreshResponse.json();
-        setTitle(refreshedData.title || "");
-        setDescription(refreshedData.description || "");
-        setAddress(refreshedData.address || "");
-        setSelectedAmenities(refreshedData.amenities || []);
-      }
-      
     } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error);
       toast({
         title: "Erreur",
         description: error instanceof Error ? error.message : "Une erreur s'est produite",
@@ -384,6 +395,41 @@ export default function MyProperty() {
                 </div>
 
                 <div>
+                  <Label htmlFor="address">Adresse</Label>
+                  {isLoaded ? (
+                    <div className="relative">
+                      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                        <MapPin className="h-5 w-5" />
+                      </div>
+                      <Autocomplete
+                        onLoad={(autocomplete) => setAutocomplete(autocomplete)}
+                        onPlaceChanged={handlePlaceChanged}
+                        options={{ fields: ["formatted_address", "geometry"] }}
+                      >
+                        <Input
+                          id="address"
+                          ref={addressInputRef}
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Entrez l'adresse complète"
+                          className="pl-10"
+                          required
+                        />
+                      </Autocomplete>
+                    </div>
+                  ) : (
+                    <Input
+                      id="address"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Chargement de Google Maps..."
+                      disabled
+                    />
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Sélectionnez une adresse dans les suggestions pour valider</p>
+                </div>
+
+                <div>
                   <Label htmlFor="description">Description</Label>
                   <Textarea
                     id="description"
@@ -392,17 +438,6 @@ export default function MyProperty() {
                     disabled={!isEditing}
                     rows={6}
                     placeholder="Décrivez votre bien en détail..."
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="address">Adresse</Label>
-                  <Input
-                    id="address"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="Adresse complète"
                   />
                 </div>
 

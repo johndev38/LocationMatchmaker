@@ -2,13 +2,29 @@ import Header from "./header";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Loader2, MapPin, Calendar, Users, Ruler, Euro, Trash2, MessageSquare } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { 
+  Loader2, 
+  MapPin, 
+  Calendar, 
+  Users, 
+  Ruler, 
+  Euro, 
+  Trash2, 
+  MessageSquare,
+  CheckCircle2,
+  XCircle, 
+  Filter,
+  Home
+} from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Property {
   title?: string;
@@ -24,12 +40,18 @@ interface Offer {
   price: number;
   description: string;
   availableAmenities?: string[];
+  owner?: {
+    name: string;
+    avatar?: string;
+  };
 }
 
 export default function MyListings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("active");
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
 
   // Récupérer les annonces de l'utilisateur
   const { data: userListings = [], isLoading: loadingListings } = useQuery({
@@ -107,6 +129,18 @@ export default function MyListings() {
     },
   });
 
+  // Filtrer les annonces selon l'onglet actif
+  const filteredListings = userListings.filter((listing: any) => {
+    if (activeTab === "active") return listing.status === "active";
+    if (activeTab === "inactive") return listing.status === "inactive" || listing.status === "expired";
+    return true; // 'all' tab
+  });
+
+  // Si une demande est sélectionnée, filtrer pour n'afficher que ses offres
+  const displayedOffers = selectedRequestId 
+    ? allPropertyOffers.filter((offer: Offer) => offer.requestId === selectedRequestId)
+    : allPropertyOffers;
+
   if (loadingListings) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -130,35 +164,64 @@ export default function MyListings() {
           </Button>
         </div>
 
+        <Tabs defaultValue="active" value={activeTab} onValueChange={setActiveTab} className="mb-8">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsTrigger value="active" className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Actives</span>
+            </TabsTrigger>
+            <TabsTrigger value="inactive" className="flex items-center gap-2">
+              <XCircle className="h-4 w-4" />
+              <span>Terminées</span>
+            </TabsTrigger>
+            <TabsTrigger value="all" className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              <span>Toutes</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {userListings.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow">
+            <Home className="h-12 w-12 mx-auto text-gray-300 mb-4" />
             <p className="text-gray-500 mb-4">Vous n'avez pas encore de demande de location</p>
             <p className="text-gray-400 mb-6">Créez votre première demande pour recevoir des offres de propriétaires</p>
             <Button asChild>
               <a href="/create-request">Créer une demande</a>
             </Button>
           </div>
+        ) : filteredListings.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-lg shadow">
+            <p className="text-gray-500 mb-4">Aucune demande {activeTab === "active" ? "active" : activeTab === "inactive" ? "terminée" : ""}</p>
+            {activeTab !== "active" && (
+              <Button asChild>
+                <a href="/create-request">Créer une nouvelle demande</a>
+              </Button>
+            )}
+          </div>
         ) : (
           <div className="space-y-8">
-            {userListings.map((listing: any) => (
-              <div key={listing.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
-                <div className="p-6">
-                  {/* En-tête de la demande */}
-                  <div className="flex justify-between items-start mb-6">
+            {filteredListings.map((listing: any) => (
+              <Card 
+                key={listing.id} 
+                className={`overflow-hidden transition-all ${selectedRequestId === listing.id ? 'ring-2 ring-pink-500' : ''}`}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
                     <div>
-                      <h2 className="text-2xl font-semibold flex items-center gap-2">
+                      <CardTitle className="text-2xl font-semibold flex items-center gap-2">
                         <MapPin className="h-5 w-5 text-pink-500" />
                         {listing.departureCity}
-                      </h2>
-                      <div className="flex items-center gap-4 mt-2 text-gray-600">
+                      </CardTitle>
+                      <CardDescription className="flex items-center gap-4 mt-2">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
                           {new Date(listing.startDate).toLocaleDateString('fr-FR')} - {new Date(listing.endDate).toLocaleDateString('fr-FR')}
                         </span>
                         <Badge variant={listing.status === 'active' ? 'default' : 'secondary'}>
-                          {listing.status}
+                          {listing.status === 'active' ? 'Active' : 'Terminée'}
                         </Badge>
-                      </div>
+                      </CardDescription>
                     </div>
                     <Button
                       variant="destructive"
@@ -172,7 +235,9 @@ export default function MyListings() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
+                </CardHeader>
 
+                <CardContent>
                   {/* Détails de la demande */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                     <div>
@@ -221,15 +286,35 @@ export default function MyListings() {
                       </div>
                     </div>
                   )}
+                </CardContent>
 
-                  <Separator className="my-6" />
+                <CardFooter className="flex justify-between items-center px-6 py-4 bg-gray-50">
+                  <div className="text-sm">
+                    <span className="font-medium text-gray-700">
+                      {allPropertyOffers.filter((o: Offer) => o.requestId === listing.id).length} 
+                    </span> offres reçues
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setSelectedRequestId(selectedRequestId === listing.id ? null : listing.id)}
+                  >
+                    {selectedRequestId === listing.id ? "Masquer les offres" : "Voir les offres"}
+                  </Button>
+                </CardFooter>
 
-                  {/* Section des offres reçues */}
-                  <div>
+                {/* Section des offres reçues (visible seulement si cette demande est sélectionnée) */}
+                {selectedRequestId === listing.id && (
+                  <div className="border-t border-gray-100 px-6 py-5">
                     <h3 className="text-xl font-semibold mb-4">Offres reçues</h3>
                     {loadingOffers ? (
                       <div className="flex justify-center py-4">
                         <Loader2 className="h-6 w-6 animate-spin text-pink-500" />
+                      </div>
+                    ) : allPropertyOffers.filter((offer: Offer) => offer.requestId === listing.id).length === 0 ? (
+                      <div className="text-center py-6 bg-gray-50 rounded-lg">
+                        <p className="text-gray-500">Aucune offre reçue pour cette demande</p>
+                        <p className="text-gray-400 text-sm mt-2">Les propriétaires vous contacteront dès qu'ils auront des logements qui correspondent à vos critères</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -248,11 +333,8 @@ export default function MyListings() {
                                             <img
                                               src={photo}
                                               alt={`Photo ${index + 1}`}
-                                              className="w-full h-full object-cover rounded-t-lg"
+                                              className="absolute inset-0 w-full h-full object-cover"
                                             />
-                                            <div className="absolute bottom-2 right-2 bg-black/50 text-white px-2 py-1 rounded-full text-xs">
-                                              {index + 1}/{offer.property?.photos?.length}
-                                            </div>
                                           </div>
                                         </CarouselItem>
                                       ))}
@@ -262,46 +344,52 @@ export default function MyListings() {
                                   </Carousel>
                                 </div>
                               ) : (
-                                <div className="h-64 bg-gray-100 flex items-center justify-center rounded-t-lg">
+                                <div className="h-64 bg-gray-100 flex items-center justify-center">
                                   <p className="text-gray-400">Aucune photo disponible</p>
                                 </div>
                               )}
 
-                              <CardContent className="p-4">
-                                <div className="flex justify-between items-start mb-3">
+                              <CardHeader>
+                                <div className="flex items-start justify-between">
                                   <div>
-                                    <h4 className="font-semibold">{offer.property?.title || 'Sans titre'}</h4>
-                                    <p className="text-sm text-gray-600">{offer.property?.address}</p>
+                                    <CardTitle>
+                                      {offer.property?.title || "Propriété sans titre"}
+                                    </CardTitle>
+                                    <CardDescription>
+                                      {offer.property?.address}
+                                    </CardDescription>
                                   </div>
                                   <Badge
                                     variant={
-                                      offer.status === "pending" ? "secondary" :
-                                      offer.status === "accepted" ? "default" :
-                                      "destructive"
+                                      offer.status === "accepted"
+                                        ? "default"
+                                        : offer.status === "rejected"
+                                        ? "destructive"
+                                        : "secondary"
                                     }
                                   >
-                                    {offer.status === "pending" ? "En attente" :
-                                     offer.status === "accepted" ? "Acceptée" :
-                                     "Refusée"}
+                                    {offer.status === "pending"
+                                      ? "En attente"
+                                      : offer.status === "accepted"
+                                      ? "Acceptée"
+                                      : "Refusée"}
                                   </Badge>
                                 </div>
+                              </CardHeader>
 
-                                <p className="text-xl font-semibold text-pink-600 mb-2">{offer.price} € / mois</p>
-                                <p className="text-sm text-gray-700 mb-4">{offer.description}</p>
-
+                              <CardContent>
+                                <p className="text-2xl font-bold text-pink-600 mb-3">{offer.price} € <span className="text-sm font-normal text-gray-500">/ mois</span></p>
+                                <p className="text-gray-700 mb-4">{offer.description}</p>
+                                
                                 {offer.availableAmenities && offer.availableAmenities.length > 0 && (
-                                  <div className="mb-4">
-                                    <p className="text-xs text-gray-500 mb-2">Prestations disponibles</p>
-                                    <div className="flex flex-wrap gap-1">
+                                  <div>
+                                    <p className="text-sm text-gray-500 mb-2">Prestations incluses</p>
+                                    <div className="flex flex-wrap gap-2">
                                       {offer.availableAmenities.map((amenity: string) => (
-                                        <Badge 
-                                          key={amenity} 
+                                        <Badge
+                                          key={amenity}
                                           variant="outline"
-                                          className={`text-xs capitalize ${
-                                            listing.amenities?.includes(amenity) 
-                                              ? 'bg-green-50 text-green-700 border-green-200' 
-                                              : 'bg-gray-50 text-gray-600'
-                                          }`}
+                                          className="capitalize"
                                         >
                                           {amenity.replace(/_/g, " ")}
                                         </Badge>
@@ -309,55 +397,51 @@ export default function MyListings() {
                                     </div>
                                   </div>
                                 )}
+                              </CardContent>
 
+                              <CardFooter className="flex justify-between bg-gray-50 pt-3">
+                                <div className="flex items-center gap-2">
+                                  <Avatar>
+                                    <AvatarImage src={offer.owner?.avatar} />
+                                    <AvatarFallback>{offer.owner?.name?.charAt(0) || "U"}</AvatarFallback>
+                                  </Avatar>
+                                  <span className="text-sm">{offer.owner?.name || "Propriétaire"}</span>
+                                </div>
+                                
                                 <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1"
-                                  >
-                                    <MessageSquare className="h-4 w-4 mr-2" />
-                                    Contacter
-                                  </Button>
                                   {offer.status === "pending" && (
                                     <>
-                                      <Button
-                                        size="sm"
-                                        className="flex-1"
-                                        onClick={() => updateOfferStatusMutation.mutate({ 
-                                          offerId: offer.id, 
-                                          status: "accepted" 
-                                        })}
-                                      >
-                                        Accepter
-                                      </Button>
-                                      <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        className="flex-1"
-                                        onClick={() => updateOfferStatusMutation.mutate({ 
-                                          offerId: offer.id, 
-                                          status: "rejected" 
-                                        })}
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        onClick={() => updateOfferStatusMutation.mutate({ offerId: offer.id, status: "rejected" })}
                                       >
                                         Refuser
                                       </Button>
+                                      <Button 
+                                        size="sm"
+                                        onClick={() => updateOfferStatusMutation.mutate({ offerId: offer.id, status: "accepted" })}
+                                      >
+                                        Accepter
+                                      </Button>
                                     </>
                                   )}
+                                  <Button 
+                                    size="sm" 
+                                    variant="secondary"
+                                  >
+                                    <MessageSquare className="h-4 w-4 mr-1" /> 
+                                    Contacter
+                                  </Button>
                                 </div>
-                              </CardContent>
+                              </CardFooter>
                             </Card>
                           ))}
-                        {allPropertyOffers.filter((offer: Offer) => offer.requestId === listing.id).length === 0 && (
-                          <div className="col-span-2 text-center py-8 bg-gray-50 rounded-lg">
-                            <p className="text-gray-500">Aucune offre reçue pour cette demande</p>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
+                )}
+              </Card>
             ))}
           </div>
         )}
