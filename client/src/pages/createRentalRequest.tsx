@@ -13,11 +13,12 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import {
   Loader2,
   Building2,
@@ -27,11 +28,11 @@ import {
   Warehouse,
   Leaf,
   Droplets,
-  Minus,
-  Plus,
+  MapPin,
+  Euro,
+  Info,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Library } from "@googlemaps/js-api-loader";
+import { useState, useRef, useEffect } from "react";
 import {
   useJsApiLoader,
   GoogleMap,
@@ -40,22 +41,34 @@ import {
   Autocomplete,
 } from "@react-google-maps/api";
 import { Slider } from "@/components/ui/slider";
-import { DateRange } from "react-date-range";
-import "react-date-range/dist/styles.css";
-import "react-date-range/dist/theme/default.css";
-import { useNavigate } from "react-router-dom";
-import Header from "./header";
-import { Popover, PopoverTrigger, PopoverContent } from "@radix-ui/react-popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import { CalendarIcon } from "lucide-react";
 import GuestSelector from "@/lib/GuestSelector";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
-import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
-import { CalendarIcon } from "lucide-react";
-// import ProfileTab from "./ProfileTab";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { useNavigate } from "react-router-dom";
+import Header from "./header";
 
 /* 
   🔹 Couleurs, typographie et spacing inspirés d'Airbnb
@@ -126,53 +139,97 @@ const locationTypeIcons = {
 const mapContainerStyle = {
   height: "400px",
   width: "100%",
-  borderRadius: "8px",
+  borderRadius: "12px",
   boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
 };
 
-// Libraries Google Maps
-const libraries: Library[] = ["places"];
+// Catégories d'aménités pour une meilleure organisation
+const amenityCategories = {
+  "Confort essentiel": [
+    "wifi",
+    "climatisation",
+    "lave_linge",
+    "lave_vaisselle",
+    "television",
+    "ascenseur",
+  ],
+  "Extérieur": [
+    "piscine",
+    "jardin",
+    "terrasse",
+    "barbecue",
+    "parking",
+  ],
+  "Luxe et bien-être": [
+    "jacuzzi",
+    "sauna",
+    "salle_sport",
+  ],
+  "Vues et environnement": [
+    "vue_mer",
+    "vue_montagne",
+    "calme",
+  ],
+  "Accessibilité": [
+    "accessible_handicap",
+    "animaux_acceptes",
+  ],
+  "Proximité": [
+    "proche_commerces",
+    "proche_transports",
+    "proche_plage",
+    "proche_ski",
+  ],
+};
 
 export default function CreateRentalRequest() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [coordinates, setCoordinates] = useState({
-    lat: 48.8566,
-    lng: 2.3522,
+    lat: 46.603354, // Centre de la France
+    lng: 1.888334,
   });
-  const [autocomplete, setAutocomplete] =
-    useState<google.maps.places.Autocomplete | null>(null);
-  const [circleRadius, setCircleRadius] = useState(100 * 1000); // Par défaut 100 km
-  const mapRef = useRef<google.maps.Map | null>(null); // Référence pour la carte
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(),
-    endDate: new Date(),
-    key: "selection",
+  const [dateRange, setDateRange] = useState<{
+    from: Date;
+    to: Date | undefined;
+  }>({
+    from: new Date(),
+    to: undefined,
   });
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const [circleRadius, setCircleRadius] = useState(100 * 1000); // 100 km par défaut
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const [activeTab, setActiveTab] = useState("informations");
+  
+  // Configuration de l'API Google Maps
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
-    libraries,
+    libraries: ["places"],
   });
 
+  // Configuration du formulaire avec React Hook Form et validation par Zod
   const form = useForm<RentalRequest>({
     resolver: zodResolver(insertRentalRequestSchema),
     defaultValues: {
       departureCity: "",
       locationType: [],
-      maxDistance: 50,
+      maxDistance: 100,
       adults: 1,
       children: 0,
       babies: 0,
       pets: 0,
       maxBudget: 1000,
-      amenities: [], // Valeur par défaut pour les prestations
+      amenities: [],
+      startDate: new Date(),
+      endDate: new Date(new Date().setDate(new Date().getDate() + 7)), // 1 semaine par défaut
     },
   });
 
-  // Pour suivre les valeurs des invités et mettre à jour le récapitulatif
+  // Pour suivre les valeurs des invités
   const { adults, children, babies, pets } = form.watch();
 
+  // Mutation React Query pour soumettre la demande
   const createRequestMutation = useMutation({
     mutationFn: async (data: RentalRequest) => {
       const res = await apiRequest("POST", "/api/rental-requests", data);
@@ -181,7 +238,7 @@ export default function CreateRentalRequest() {
     onSuccess: () => {
       toast({
         title: "Demande créée",
-        description: "Votre demande de location a été créée avec succès.",
+        description: "Votre demande de location a été enregistrée avec succès.",
       });
       navigate("/my-listings");
     },
@@ -194,31 +251,39 @@ export default function CreateRentalRequest() {
     },
   });
 
-  // Met à jour le rayon du cercle quand la distance change
+  // Mise à jour du rayon du cercle quand la distance change
   useEffect(() => {
     const distance = form.getValues("maxDistance") * 1000;
     setCircleRadius(distance);
 
-    if (mapRef.current) {
+    if (mapRef.current && isLoaded) {
       const bounds = new window.google.maps.LatLngBounds();
-      bounds.extend(
-        new google.maps.LatLng(coordinates.lat, coordinates.lng)
-      ); // Point central
+      bounds.extend(new google.maps.LatLng(coordinates.lat, coordinates.lng));
       bounds.extend(
         new google.maps.LatLng(
           coordinates.lat + distance / 111320,
           coordinates.lng
         )
-      ); // Point éloigné
+      );
 
-      mapRef.current.fitBounds(bounds); // Ajuste le zoom automatiquement
+      mapRef.current.fitBounds(bounds);
     }
-  }, [form.watch("maxDistance")]);
+  }, [form.watch("maxDistance"), isLoaded]);
 
+  // Mise à jour des dates dans le formulaire quand le range date change
+  useEffect(() => {
+    if (dateRange.from) {
+      form.setValue("startDate", dateRange.from);
+    }
+    if (dateRange.to) {
+      form.setValue("endDate", dateRange.to);
+    }
+  }, [dateRange, form]);
+
+  // Gestion de la sélection d'adresse via Google Places
   const handlePlaceChanged = () => {
     if (autocomplete) {
       const place = autocomplete.getPlace();
-      console.log("Lieu sélectionné:", place);
       if (place.geometry) {
         const location = place.geometry.location;
         setCoordinates({
@@ -227,7 +292,6 @@ export default function CreateRentalRequest() {
         });
         form.setValue("departureCity", place.formatted_address || "");
       } else {
-        console.error("Erreur: Impossible de trouver l'adresse.");
         toast({
           title: "Erreur",
           description: "Impossible de trouver l'adresse.",
@@ -237,354 +301,447 @@ export default function CreateRentalRequest() {
     }
   };
 
-  // Calculer si le formulaire est valide
-  const isFormValid = form.formState.isValid && selectedTypes.length > 0;
+  // Vérifier si le formulaire est valide
+  const isFormValid = () => {
+    const hasRequiredFields = 
+      form.getValues("departureCity") && 
+      selectedTypes.length > 0 && 
+      form.getValues("maxBudget") && 
+      form.getValues("startDate") && 
+      form.getValues("endDate");
+    
+    return hasRequiredFields;
+  };
 
+  // Obtenir la liste des champs manquants
   const getMissingFields = () => {
-    console.log("form.formState.isValid", form.formState.isValid);
-    console.log("selectedTypes", selectedTypes);
-    console.log("Dates valides:", form.getValues("startDate") && form.getValues("endDate"));
-    const errors = form.formState.errors;
     const missingFields = [];
     if (!form.getValues("departureCity")) missingFields.push("Ville de départ");
-    if (!form.getValues("maxDistance")) missingFields.push("Distance maximale");
-    if (!form.getValues("maxBudget")) missingFields.push("Budget maximum");
     if (selectedTypes.length === 0) missingFields.push("Types de destination");
+    if (!form.getValues("maxBudget")) missingFields.push("Budget maximum");
+    if (!dateRange.from || !dateRange.to) missingFields.push("Dates de séjour");
     return missingFields;
   };
 
-  useEffect(() => {
-    const subscription = form.watch((values: any) => {
-      console.log("Valeurs actuelles du formulaire:", values);
-      console.log("Erreurs de validation:", form.formState.errors);
-      
-      // Forcer la mise à jour du formulaire pour prendre en compte toutes les valeurs
-      if (values.departureCity && selectedTypes.length > 0 && values.maxBudget && 
-          values.startDate && values.endDate) {
-        form.trigger();
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form, selectedTypes]);
-
-  const handleSubmitForm = (data: any) => {
-    // Même si le formulaire n'est pas valide selon isFormValid, on essaie de soumettre
-    // si toutes les valeurs requises sont présentes
-    const hasRequiredFields = form.getValues("departureCity") && selectedTypes.length > 0 && 
-                              form.getValues("maxBudget") && form.getValues("startDate") && 
-                              form.getValues("endDate");
-                              
-    if (!hasRequiredFields) {
+  // Soumission du formulaire
+  const handleSubmitForm = (data: RentalRequest) => {
+    if (!isFormValid()) {
       toast({
-        title: "Erreur",
+        title: "Formulaire incomplet",
         description: "Veuillez remplir tous les champs obligatoires.",
         variant: "destructive",
       });
       return;
     }
 
-    // Mise à jour des champs
+    // Mise à jour des types de location
     data.locationType = selectedTypes;
-    console.log("Données soumises:", data);
     createRequestMutation.mutate(data);
   };
 
-  const updateCount = (
-    field: "adults" | "children" | "babies" | "pets",
-    value: number
-  ) => {
-    const currentValue = Number(form.getValues(field)) || 0;
-    form.setValue(field, Math.max(0, currentValue + value));
-  };
-
-  // État pour contrôler l'ouverture du Popover pour la sélection des invités
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f8f9fa]">
       <Header />
-      {/* <ProfileTab /> */}
-      <div style={containerStyle}>
-        <div className="pt-20">
-          <h2 style={headingStyle}>Créer une demande de location</h2>
-          <Form {...form}>
-            <GuestSelector
-              adults={adults}
-              onAdultsChange={(val: number) => form.setValue("adults", val)}
-              children={children}
-              onChildrenChange={(val: number) => form.setValue("children", val)}
-              babies={babies}
-              onBabiesChange={(val: number) => form.setValue("babies", val)}
-              pets={pets}
-              onPetsChange={(val) => form.setValue("pets", val)}
-            />
+      <div className="container max-w-4xl mx-auto px-4 py-8 pt-24">
+        <Card className="bg-white border-none shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-2xl font-bold text-center text-gray-800">
+              Créer votre demande de location
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="informations" value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid grid-cols-3 mb-6">
+                <TabsTrigger value="informations">Informations</TabsTrigger>
+                <TabsTrigger value="preferences">Préférences</TabsTrigger>
+                <TabsTrigger value="amenites">Aménités</TabsTrigger>
+              </TabsList>
 
-            <form onSubmit={form.handleSubmit(handleSubmitForm)}>
-              <FormItem>
-                <div style={subheadingStyle}>Période de location</div>
-                <DateRange
-                  ranges={[dateRange]}
-                  onChange={(ranges: any) => {
-                    setDateRange(ranges.selection);
-                    form.setValue("startDate", ranges.selection.startDate);
-                    form.setValue("endDate", ranges.selection.endDate);
-                  }}
-                  moveRangeOnFirstSelection={false}
-                  rangeColors={["#FF385C"]} // Couleur Airbnb
-                  className="w-full rounded-md shadow-sm"
-                />
-              </FormItem>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleSubmitForm)}>
+                  <TabsContent value="informations" className="space-y-6">
+                    {/* Ville de départ */}
+                    <div className="space-y-2">
+                      <FormField
+                        control={form.control}
+                        name="departureCity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-md font-semibold flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              Ville de départ
+                            </FormLabel>
+                            <FormControl>
+                              {isLoaded && (
+                                <Autocomplete
+                                  onLoad={setAutocomplete}
+                                  onPlaceChanged={handlePlaceChanged}
+                                >
+                                  <Input
+                                    placeholder="Entrez votre ville de départ"
+                                    {...field}
+                                    className="h-12"
+                                  />
+                                </Autocomplete>
+                              )}
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-              <FormField
-                control={form.control}
-                name="departureCity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel style={fieldLabelStyle}>
-                      Ville de départ
-                    </FormLabel>
-                    <FormControl>
+                      {/* Carte Google Maps */}
                       {isLoaded && (
-                        <Autocomplete
-                          onLoad={setAutocomplete}
-                          onPlaceChanged={handlePlaceChanged}
-                        >
-                          <Input
-                            placeholder="Entrez votre ville de départ"
-                            {...field}
-                            className="border-gray-300 rounded-md focus:ring-2 focus:ring-pink-200 transition duration-150"
-                          />
-                        </Autocomplete>
-                      )}
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="maxDistance"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel style={fieldLabelStyle}>
-                      Distance maximale (km)
-                    </FormLabel>
-                    <FormControl>
-                      <Slider
-                        min={10}
-                        max={500}
-                        step={10}
-                        value={[field.value]}
-                        onValueChange={(val) =>
-                          form.setValue("maxDistance", val[0])
-                        }
-                        className="mt-2"
-                      />
-                    </FormControl>
-                    <p className="text-gray-600">{field.value} km</p>
-                  </FormItem>
-                )}
-              />
-
-              {isLoaded && (
-                <GoogleMap
-                  mapContainerStyle={mapContainerStyle}
-                  center={coordinates}
-                  zoom={10}
-                  onLoad={(map) => {
-                    mapRef.current = map;
-                  }}
-                >
-                  <Marker position={coordinates} />
-                  <Circle
-                    center={coordinates}
-                    radius={circleRadius}
-                    options={{
-                      strokeColor: "#FF385C",
-                      strokeOpacity: 0.8,
-                      strokeWeight: 2,
-                      fillOpacity: 0.15, // plus léger pour être moins agressif
-                    }}
-                  />
-                </GoogleMap>
-              )}
-
-              <FormField
-                control={form.control}
-                name="locationType"
-                render={() => (
-                  <FormItem>
-                    <FormLabel style={fieldLabelStyle}>
-                      Types de destination
-                    </FormLabel>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {locationTypes.map((type) => {
-                        const isSelected = selectedTypes.includes(type);
-                        return (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={() => {
-                              const newTypes = isSelected
-                                ? selectedTypes.filter((t) => t !== type)
-                                : [...selectedTypes, type];
-                              setSelectedTypes(newTypes);
-                              form.setValue("locationType", newTypes);
+                        <div className="mt-4">
+                          <GoogleMap
+                            mapContainerStyle={mapContainerStyle}
+                            center={coordinates}
+                            zoom={6}
+                            onLoad={(map) => {
+                              mapRef.current = map;
                             }}
-                            style={{
-                              ...(isSelected
-                                ? buttonPrimaryStyle
-                                : buttonOutlineStyle),
-                              borderWidth: "2px",
-                              borderStyle: "solid",
-                              borderRadius: "12px",
-                              display: "flex",
-                              flexDirection: "column",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              padding: "12px",
-                              height: "88px",
-                              cursor: "pointer",
-                            }}
-                            onMouseDown={(e) => {
-                              e.currentTarget.style.transform =
-                                buttonActiveStyle.transform || "";
-                            }}
-                            onMouseUp={(e) => {
-                              e.currentTarget.style.transform = "scale(1)";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = "scale(1)";
-                            }}
-                            className="transition-transform duration-100 hover:shadow-md"
                           >
-                            {locationTypeIcons[
-                              type as keyof typeof locationTypeIcons
-                            ]}
-                            <span className="text-sm font-semibold mt-1">
-                              {type.charAt(0).toUpperCase() + type.slice(1)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </FormItem>
-                )}
-              />
+                            <Marker position={coordinates} />
+                            <Circle
+                              center={coordinates}
+                              radius={circleRadius}
+                              options={{
+                                strokeColor: "#FF385C",
+                                strokeOpacity: 0.8,
+                                strokeWeight: 2,
+                                fillColor: "#FF385C",
+                                fillOpacity: 0.15,
+                              }}
+                            />
+                          </GoogleMap>
+                        </div>
+                      )}
 
-              <FormField
-                control={form.control}
-                name="maxBudget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel style={fieldLabelStyle}>
-                      Budget maximum (€)
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value, 10))
-                        }
-                        className="border-gray-300 rounded-md focus:ring-2 focus:ring-pink-200 transition duration-150"
+                      {/* Distance maximale */}
+                      <FormField
+                        control={form.control}
+                        name="maxDistance"
+                        render={({ field }) => (
+                          <FormItem className="mt-4">
+                            <FormLabel className="text-md font-semibold">
+                              Distance maximale
+                            </FormLabel>
+                            <div className="flex items-center gap-2">
+                              <FormControl>
+                                <Slider
+                                  min={10}
+                                  max={500}
+                                  step={10}
+                                  value={[field.value]}
+                                  onValueChange={(val) =>
+                                    form.setValue("maxDistance", val[0])
+                                  }
+                                />
+                              </FormControl>
+                              <span className="min-w-[60px] text-center font-medium bg-gray-100 rounded-md px-2 py-1">
+                                {field.value} km
+                              </span>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              {/* Section des prestations souhaitées */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Prestations souhaitées</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {amenities.map((amenity) => (
-                    <div key={amenity} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`amenity-${amenity}`}
-                        checked={form.watch("amenities")?.includes(amenity)}
-                        onCheckedChange={(checked) => {
-                          const currentAmenities = form.watch("amenities") || [];
-                          if (checked) {
-                            form.setValue("amenities", [...currentAmenities, amenity]);
-                          } else {
-                            form.setValue(
-                              "amenities",
-                              currentAmenities.filter((a: string) => a !== amenity)
-                            );
-                          }
-                        }}
-                      /> 
-                      <Label
-                        htmlFor={`amenity-${amenity}`}
-                        className="capitalize cursor-pointer"
-                      >
-                        {amenity.replace(/_/g, " ")}
-                      </Label>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="mt-4 mb-2 p-2 bg-gray-100 rounded">
-                <p className="font-bold">État du formulaire :</p>
-                <p>isFormValid: {String(isFormValid)}</p>
-                <p>form.formState.isValid: {String(form.formState.isValid)}</p>
-                <p>form.formState.errors: {JSON.stringify(form.formState.errors)}</p>
-                <p>selectedTypes: {selectedTypes.join(", ")}</p>
-                <p>Erreurs : {JSON.stringify(form.formState.errors)}</p>
-                <div className="mt-2">
-                  <p className="font-bold">Valeurs actuelles :</p>
-                  <pre className="text-xs mt-1 bg-white p-2 rounded">
-                    {JSON.stringify({
-                      departureCity: form.getValues("departureCity"),
-                      locationType: form.getValues("locationType"),
-                      maxDistance: form.getValues("maxDistance"),
-                      adults: form.getValues("adults"),
-                      children: form.getValues("children"),
-                      babies: form.getValues("babies"),
-                      pets: form.getValues("pets"),
-                      maxBudget: form.getValues("maxBudget"),
-                      startDate: form.getValues("startDate"),
-                      endDate: form.getValues("endDate"),
-                      amenities: form.getValues("amenities"),
-                    }, null, 2)}
-                  </pre>
-                </div>
-                <div className="mt-4">
-                  <p className="font-bold">Champs manquants :</p>
-                  <ul className="list-disc pl-4">
-                    {getMissingFields().map((field, index) => (
-                      <li key={index} className="text-red-500">{field}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+                    {/* Période de location */}
+                    <div className="space-y-2">
+                      <p className="text-md font-semibold">Dates du séjour</p>
+                      <div className="grid gap-2">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal h-12",
+                                !dateRange && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {dateRange?.from ? (
+                                dateRange.to ? (
+                                  <>
+                                    {format(dateRange.from, "PPP", { locale: fr })} - {" "}
+                                    {format(dateRange.to, "PPP", { locale: fr })}
+                                  </>
+                                ) : (
+                                  format(dateRange.from, "PPP", { locale: fr })
+                                )
+                              ) : (
+                                <span>Sélectionnez vos dates</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              initialFocus
+                              mode="range"
+                              defaultMonth={dateRange?.from}
+                              selected={dateRange}
+                              onSelect={(range) => {
+                                setDateRange(range || { from: new Date(), to: undefined });
+                                if (range?.from) form.setValue("startDate", range.from);
+                                if (range?.to) form.setValue("endDate", range.to);
+                              }}
+                              numberOfMonths={2}
+                              locale={fr}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
 
-              <Button
-                type="submit"
-                className="w-full py-3 mt-4 text-lg rounded-md font-semibold transition duration-150"
-                style={buttonPrimaryStyle}
-                disabled={createRequestMutation.isPending}
-                onMouseDown={(e) => {
-                  e.currentTarget.style.transform =
-                    buttonActiveStyle.transform || "";
-                }}
-                onMouseUp={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
-                }}
-              >
-                {createRequestMutation.isPending && (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                )}
-                Soumettre la demande
-              </Button>
-            </form>
-          </Form>
-        </div>
+                    {/* Nombre de voyageurs */}
+                    <div className="space-y-2">
+                      <p className="text-md font-semibold">Voyageurs</p>
+                      <GuestSelector
+                        adults={adults}
+                        onAdultsChange={(val: number) => form.setValue("adults", val)}
+                        children={children}
+                        onChildrenChange={(val: number) => form.setValue("children", val)}
+                        babies={babies}
+                        onBabiesChange={(val: number) => form.setValue("babies", val)}
+                        pets={pets}
+                        onPetsChange={(val) => form.setValue("pets", val)}
+                      />
+                    </div>
+
+                    {/* Budget maximum */}
+                    <FormField
+                      control={form.control}
+                      name="maxBudget"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-md font-semibold flex items-center gap-2">
+                            <Euro className="h-4 w-4" />
+                            Budget maximum
+                          </FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                placeholder="Entrez votre budget maximum"
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                                className="h-12 pl-10"
+                              />
+                              <span className="absolute left-3 top-3 text-gray-500">€</span>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex justify-between mt-6">
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        onClick={() => navigate(-1)}
+                      >
+                        Annuler
+                      </Button>
+                      <Button 
+                        type="button"
+                        onClick={() => setActiveTab("preferences")}
+                      >
+                        Suivant
+                      </Button>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="preferences" className="space-y-6">
+                    {/* Types de destination */}
+                    <div className="space-y-2">
+                      <p className="text-md font-semibold">Types de destination</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {locationTypes.map((type) => {
+                          const isSelected = selectedTypes.includes(type);
+                          return (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => {
+                                const newTypes = isSelected
+                                  ? selectedTypes.filter((t) => t !== type)
+                                  : [...selectedTypes, type];
+                                setSelectedTypes(newTypes);
+                                form.setValue("locationType", newTypes);
+                              }}
+                              className={cn(
+                                "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all h-[90px]",
+                                isSelected 
+                                  ? "border-pink-500 bg-pink-50 text-pink-700" 
+                                  : "border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-gray-50"
+                              )}
+                            >
+                              {locationTypeIcons[type as keyof typeof locationTypeIcons]}
+                              <span className="text-sm font-medium mt-2 capitalize">
+                                {type}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selectedTypes.length === 0 && (
+                        <p className="text-sm text-red-500 mt-1">
+                          Veuillez sélectionner au moins un type de destination
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between mt-6">
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        onClick={() => setActiveTab("informations")}
+                      >
+                        Précédent
+                      </Button>
+                      <Button 
+                        type="button"
+                        onClick={() => setActiveTab("amenites")}
+                      >
+                        Suivant
+                      </Button>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="amenites" className="space-y-6">
+                    {/* Aménités souhaitées */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Info className="h-4 w-4 text-gray-500" />
+                        <p className="text-sm text-gray-500 italic">
+                          Ces préférences sont optionnelles et aideront les propriétaires à vous proposer des logements adaptés.
+                        </p>
+                      </div>
+                      
+                      <Accordion type="multiple" className="w-full">
+                        {Object.entries(amenityCategories).map(([category, amenityList]) => (
+                          <AccordionItem key={category} value={category}>
+                            <AccordionTrigger className="text-md font-semibold hover:no-underline">
+                              {category}
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                                {amenityList.map((amenity) => (
+                                  <div key={amenity} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`amenity-${amenity}`}
+                                      checked={form.watch("amenities")?.includes(amenity)}
+                                      onCheckedChange={(checked) => {
+                                        const currentAmenities = form.watch("amenities") || [];
+                                        if (checked) {
+                                          form.setValue("amenities", [...currentAmenities, amenity]);
+                                        } else {
+                                          form.setValue(
+                                            "amenities",
+                                            currentAmenities.filter((a: string) => a !== amenity)
+                                          );
+                                        }
+                                      }}
+                                    />
+                                    <Label
+                                      htmlFor={`amenity-${amenity}`}
+                                      className="capitalize cursor-pointer"
+                                    >
+                                      {amenity.replace(/_/g, " ")}
+                                    </Label>
+                                  </div>
+                                ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                    </div>
+
+                    {/* Récapitulatif */}
+                    <Card className="border border-gray-200 bg-gray-50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">Récapitulatif</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="font-medium">Ville de départ:</div>
+                          <div>{form.getValues("departureCity") || "Non spécifié"}</div>
+                          
+                          <div className="font-medium">Dates:</div>
+                          <div>
+                            {dateRange.from && dateRange.to
+                              ? `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`
+                              : "Non spécifiées"}
+                          </div>
+                          
+                          <div className="font-medium">Distance max:</div>
+                          <div>{form.getValues("maxDistance")} km</div>
+                          
+                          <div className="font-medium">Voyageurs:</div>
+                          <div>
+                            {adults} adulte{adults > 1 ? "s" : ""}
+                            {children > 0 && `, ${children} enfant${children > 1 ? "s" : ""}`}
+                            {babies > 0 && `, ${babies} bébé${babies > 1 ? "s" : ""}`}
+                            {pets > 0 && `, ${pets} animal${pets > 1 ? "aux" : ""}`}
+                          </div>
+                          
+                          <div className="font-medium">Budget max:</div>
+                          <div>{form.getValues("maxBudget")} €</div>
+                          
+                          <div className="font-medium">Types de lieu:</div>
+                          <div>
+                            {selectedTypes.length > 0
+                              ? selectedTypes.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ")
+                              : "Non spécifiés"}
+                          </div>
+                        </div>
+                        
+                        {getMissingFields().length > 0 && (
+                          <div className="mt-4 text-red-500">
+                            <p className="font-medium">Champs manquants :</p>
+                            <ul className="list-disc pl-5">
+                              {getMissingFields().map((field, index) => (
+                                <li key={index}>{field}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <div className="flex justify-between mt-6">
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        onClick={() => setActiveTab("preferences")}
+                      >
+                        Précédent
+                      </Button>
+                      <Button 
+                        type="submit"
+                        disabled={createRequestMutation.isPending || !isFormValid()}
+                        className="bg-pink-600 hover:bg-pink-700 text-white"
+                      >
+                        {createRequestMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Traitement...
+                          </>
+                        ) : (
+                          "Soumettre la demande"
+                        )}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                </form>
+              </Form>
+            </Tabs>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
