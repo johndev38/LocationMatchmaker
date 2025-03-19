@@ -134,27 +134,30 @@ export default function MyProperty() {
     { id: "lit_simple", label: "Lit simple", icon: <Bed className="h-5 w-5" />, category: "Mobilier" },
   ];
 
-  const { data: property, isLoading } = useQuery<Property, Error>({
+  const { data: property, isLoading, refetch } = useQuery<Property, Error>({
     queryKey: ["property"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/property");
       if (!response.ok) {
         throw new Error("Erreur lors de la récupération des informations du bien");
       }
-      const data = await response.json();
-      // Initialiser les états avec les données reçues
-      setTitle(data.title || "");
-      setDescription(data.description || "");
-      setAddress(data.address || "");
-      setSelectedAmenities(data.amenities || []);
-      // Initialiser les coordonnées si elles existent
-      if (data.coordinates) {
-        setCoordinates(data.coordinates);
-      }
-      return data;
+      return response.json();
     },
     enabled: user?.isLandlord,
   });
+
+  // Effet pour initialiser les états avec les données récupérées
+  useEffect(() => {
+    if (property) {
+      setTitle(property.title || "");
+      setDescription(property.description || "");
+      setAddress(property.address || "");
+      setSelectedAmenities(property.amenities || []);
+      if (property.coordinates) {
+        setCoordinates(property.coordinates);
+      }
+    }
+  }, [property]);
 
   // Nettoyer les prévisualisations à la destruction du composant
   useEffect(() => {
@@ -163,6 +166,12 @@ export default function MyProperty() {
       pendingPhotos.forEach(photo => URL.revokeObjectURL(photo.preview));
     };
   }, [pendingPhotos]);
+
+  // Effet pour rafraîchir les données quand le composant est monté
+  useEffect(() => {
+    // Récupérer les données fraîches à chaque montage du composant
+    refetch();
+  }, [refetch]);
 
   const updatePropertyMutation = useMutation({
     mutationFn: async (propertyData: any) => {
@@ -180,7 +189,7 @@ export default function MyProperty() {
         return response.json();
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Succès",
         description: "Les informations de votre bien ont été mises à jour",
@@ -188,6 +197,20 @@ export default function MyProperty() {
       setIsEditing(false);
       // Vider les photos en attente après sauvegarde réussie
       setPendingPhotos([]);
+      
+      // Invalidate the property query to force a refresh
+      refetch();
+      
+      // Update local states with the returned data
+      if (data) {
+        setTitle(data.title || "");
+        setDescription(data.description || "");
+        setAddress(data.address || "");
+        setSelectedAmenities(data.amenities || []);
+        if (data.coordinates) {
+          setCoordinates(data.coordinates);
+        }
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -210,6 +233,9 @@ export default function MyProperty() {
         title: "Succès",
         description: "La photo a été supprimée",
       });
+      
+      // Force a refresh of the property data
+      refetch();
     },
   });
 

@@ -16,8 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MapPin, MoveHorizontal, Search, Filter, X } from "lucide-react";
-import { useState } from "react";
+import { Loader2, MapPin, MoveHorizontal, Search, Filter, X, Home, Ruler } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
 import Header from "./header";
 import { Slider } from "@/components/ui/slider";
 import { 
@@ -38,6 +38,22 @@ import {
   SheetClose
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { useJsApiLoader } from "@react-google-maps/api";
+
+// Fonction utilitaire pour calculer la distance entre deux points géographiques (en km)
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Rayon de la Terre en km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const distance = R * c; // Distance en km
+  return distance;
+}
 
 type PropertyOffer = {
   id: number;
@@ -66,6 +82,31 @@ type RentalRequest = {
   amenities: string[];
 };
 
+type UserInfo = {
+  username: string;
+  email: string;
+  address: string;
+  phone: string;
+  isLandlord: boolean;
+};
+
+type PropertyInfo = {
+  id?: number;
+  landlordId?: number;
+  title: string;
+  description: string;
+  address: string;
+  photos?: string[];
+  amenities: string[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type GeocodingResult = {
+  lat: number;
+  lng: number;
+};
+
 export default function SearchLocations() {
   const { user } = useAuth();
   const [selectedRequest, setSelectedRequest] = useState<RentalRequest | null>(null);
@@ -78,13 +119,63 @@ export default function SearchLocations() {
   const [availableAmenities, setAvailableAmenities] = useState<string[]>([]);
   
   // Filtres
-  const [filterDistance, setFilterDistance] = useState<number>(100);
+  const [filterDistance, setFilterDistance] = useState<number>(2000);
   const [filterCity, setFilterCity] = useState<string>("");
   const [filterLocationType, setFilterLocationType] = useState<string[]>([]);
   const [filterBudgetMin, setFilterBudgetMin] = useState<number>(0);
   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
   const [appliedFilters, setAppliedFilters] = useState<number>(0);
+  
+  // Nouveaux filtres pour professionnels
+  const [filterByProximity, setFilterByProximity] = useState<boolean>(false);
+  const [propertyInfo, setPropertyInfo] = useState<PropertyInfo | null>(null);
+  const [propertyCoords, setPropertyCoords] = useState<GeocodingResult | null>(null);
+  const [requestCoords, setRequestCoords] = useState<Map<number, GeocodingResult>>(new Map());
+  const [loadingGeocode, setLoadingGeocode] = useState<boolean>(false);
+  
+  // Configuration de l'API Google Maps
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
+    libraries: ["places"],
+  });
 
+  // Geocoder une adresse et obtenir ses coordonnées
+  const geocodeAddress = useCallback(async (address: string, isProperty = false, requestId?: number) => {
+    if (!address || !isLoaded) return;
+    
+    try {
+      setLoadingGeocode(true);
+      const geocoder = new google.maps.Geocoder();
+      
+      const result = await new Promise<GeocodingResult>((resolve, reject) => {
+        geocoder.geocode({ address }, (results, status) => {
+          if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
+            const location = results[0].geometry.location;
+            resolve({
+              lat: location.lat(),
+              lng: location.lng()
+            });
+          } else {
+            reject(new Error(`Erreur de géocodage: ${status}`));
+          }
+        });
+      });
+      
+      if (isProperty) {
+        setPropertyCoords(result);
+      } else if (requestId) {
+        setRequestCoords(prev => new Map(prev).set(requestId, result));
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("Erreur lors du géocodage:", error);
+      return null;
+    } finally {
+      setLoadingGeocode(false);
+    }
+  }, [isLoaded]);
+  
   const { data: rentalRequests = [], isLoading: loadingRequests } = useQuery<RentalRequest[]>({
     queryKey: ["/api/rental-requests"],
     queryFn: async () => {
@@ -102,6 +193,42 @@ export default function SearchLocations() {
     },
     enabled: user?.isLandlord,
   });
+  
+  // Récupérer les informations du bien si l'utilisateur est un professionnel
+  const { data: propertyData } = useQuery<PropertyInfo>({
+    queryKey: ["property"],
+    queryFn: async () => {
+      const response = await fetch("/api/property");
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error("Erreur lors de la récupération du bien");
+      }
+      return response.json();
+    },
+    enabled: user?.isLandlord
+  });
+  
+  // Effet pour traiter les données de propriété quand elles sont chargées
+  useEffect(() => {
+    if (propertyData) {
+      setPropertyInfo(propertyData);
+      geocodeAddress(propertyData.address, true);
+    }
+  }, [propertyData, geocodeAddress]);
+  
+  // Geocoder les adresses des demandes lorsque filterByProximity est activé
+  useEffect(() => {
+    if (filterByProximity && propertyCoords && rentalRequests.length > 0) {
+      // Geocode des adresses des demandes qui n'ont pas encore été geocodées
+      rentalRequests.forEach(request => {
+        if (!requestCoords.has(request.id)) {
+          geocodeAddress(request.departureCity, false, request.id);
+        }
+      });
+    }
+  }, [filterByProximity, propertyCoords, rentalRequests, requestCoords, geocodeAddress]);
 
   const createOfferMutation = useMutation({
     mutationFn: async ({ requestId, price, description }: { requestId: number, price: string, description: string }) => {
@@ -172,6 +299,25 @@ export default function SearchLocations() {
     return landlordOffers.some((offer: PropertyOffer) => offer.requestId === requestId);
   };
   
+  // Fonction pour vérifier si un bien est à la distance souhaitée du locataire
+  const isWithinUserDistance = (request: RentalRequest): boolean => {
+    if (!filterByProximity || !propertyCoords) return true;
+    
+    const requestCoord = requestCoords.get(request.id);
+    if (!requestCoord) return true; // Si pas encore géocodé, on l'inclut par défaut
+    
+    const distance = calculateDistance(
+      propertyCoords.lat, 
+      propertyCoords.lng, 
+      requestCoord.lat, 
+      requestCoord.lng
+    );
+    
+    // La modification est ici: on inverse la comparaison
+    // Pour que la distance entre propriété et locataire soit < à la distance définie par le locataire
+    return distance <= request.maxDistance;
+  };
+  
   // Fonction pour filtrer les demandes
   const getFilteredRequests = () => {
     return rentalRequests.filter((request) => {
@@ -195,6 +341,11 @@ export default function SearchLocations() {
         return false;
       }
       
+      // Nouveau filtre: Si le mode proximité est activé, vérifier si le bien est à la distance souhaitée du locataire
+      if (filterByProximity && !isWithinUserDistance(request)) {
+        return false;
+      }
+      
       return true;
     });
   };
@@ -202,20 +353,22 @@ export default function SearchLocations() {
   // Appliquer les filtres
   const applyFilters = () => {
     let count = 0;
-    if (filterDistance < 100) count++;
+    if (filterDistance < 2000) count++;
     if (filterCity) count++;
     if (filterLocationType.length > 0) count++;
     if (filterBudgetMin > 0) count++;
+    if (filterByProximity) count++;
     setAppliedFilters(count);
     setIsFilterOpen(false);
   };
   
   // Réinitialiser les filtres
   const resetFilters = () => {
-    setFilterDistance(100);
+    setFilterDistance(2000);
     setFilterCity("");
     setFilterLocationType([]);
     setFilterBudgetMin(0);
+    setFilterByProximity(false);
     setAppliedFilters(0);
   };
 
@@ -288,8 +441,8 @@ export default function SearchLocations() {
                       <MoveHorizontal className="h-4 w-4 text-gray-500" />
                       <Slider
                         defaultValue={[filterDistance]}
-                        max={100}
-                        step={5}
+                        max={2000}
+                        step={50}
                         value={[filterDistance]}
                         onValueChange={(values) => setFilterDistance(values[0])}
                         className="flex-1"
@@ -316,6 +469,36 @@ export default function SearchLocations() {
                       Ne montrer que les demandes avec un budget minimum de {filterBudgetMin}€
                     </p>
                   </div>
+                  
+                  {user?.isLandlord && propertyInfo?.address && (
+                    <div className="space-y-2 border-t pt-4">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="proximity-filter" className="font-medium">
+                          Filtrer par proximité à mon bien
+                        </Label>
+                        <Switch
+                          id="proximity-filter"
+                          checked={filterByProximity}
+                          onCheckedChange={setFilterByProximity}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Home className="h-4 w-4 text-gray-500" />
+                        <span className="text-gray-600 truncate" title={propertyInfo.address}>
+                          {propertyInfo.address}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Ne montrer que les demandes où votre bien est à une distance acceptable pour les locataires
+                      </p>
+                      {loadingGeocode && (
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
+                          <span className="text-xs text-gray-500">Calcul des distances en cours...</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <Label>Type de location</Label>
@@ -370,6 +553,16 @@ export default function SearchLocations() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredRequests.map((request: RentalRequest) => {
                 const existingOffer = hasExistingOffer(request.id);
+                const requestCoord = requestCoords.get(request.id);
+                const distance = propertyCoords && requestCoord
+                  ? Math.round(calculateDistance(
+                      propertyCoords.lat,
+                      propertyCoords.lng,
+                      requestCoord.lat,
+                      requestCoord.lng
+                    ))
+                  : null;
+                  
                 return (
                   <Card
                     key={request.id}
@@ -405,6 +598,14 @@ export default function SearchLocations() {
                           <span className="text-gray-500">Distance :</span>
                           <span className="font-medium">{request.maxDistance} km</span>
                         </div>
+                        {distance !== null && user?.isLandlord && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500">Votre bien :</span>
+                            <span className={`font-medium ${distance <= request.maxDistance ? 'text-green-600' : 'text-red-600'}`}>
+                              {distance} km {distance <= request.maxDistance ? '✓' : '✗'}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-1">
                           <span className="text-gray-500">Budget :</span>
                           <span className="font-medium">{request.maxBudget}€</span>
