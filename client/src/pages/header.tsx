@@ -25,9 +25,9 @@ export default function Header() {
           </Link> */}
           {!user?.isLandlord && (
             <>
-              <Link to="/create-request" className="transition hover:text-pink-500">
+              {/* <Link to="/create-request" className="transition hover:text-pink-500">
                 <Button variant="ghost">Publier une annonce</Button>
-              </Link>
+              </Link> */}
               {user && (
                 <Link to="/my-listings" className="transition hover:text-pink-500">
                   <Button variant="ghost">Mes annonces</Button>
