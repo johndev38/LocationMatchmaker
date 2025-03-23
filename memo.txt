@@ -2,7 +2,6 @@ recupereration des annonces dont je propose mon logement
 
 un compteur des offre recu par une annonce
 
+il faut que quand le proprietaire fait une offre, il y a un tableau qui fait matché les améneties du locataire et du propriétaire.
 
-espace configurable avec photo pour les pro
 
-location dans un perimetre

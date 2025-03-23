@@ -257,18 +257,39 @@ export default function CreateRentalRequest() {
     setCircleRadius(distance);
 
     if (mapRef.current && isLoaded) {
+      // Créer des limites qui incluent toute la circonférence du cercle, pas seulement un point
       const bounds = new window.google.maps.LatLngBounds();
-      bounds.extend(new google.maps.LatLng(coordinates.lat, coordinates.lng));
-      bounds.extend(
-        new google.maps.LatLng(
-          coordinates.lat + distance / 111320,
-          coordinates.lng
-        )
-      );
+      
+      // Centre du cercle
+      const center = new google.maps.LatLng(coordinates.lat, coordinates.lng);
+      bounds.extend(center);
+      
+      // Points cardinaux à la distance du rayon pour s'assurer que tout le cercle est visible
+      // Nord
+      bounds.extend(new google.maps.LatLng(
+        coordinates.lat + distance / 111320, 
+        coordinates.lng
+      ));
+      // Sud
+      bounds.extend(new google.maps.LatLng(
+        coordinates.lat - distance / 111320, 
+        coordinates.lng
+      ));
+      // Est
+      bounds.extend(new google.maps.LatLng(
+        coordinates.lat,
+        coordinates.lng + distance / (111320 * Math.cos(coordinates.lat * (Math.PI / 180)))
+      ));
+      // Ouest
+      bounds.extend(new google.maps.LatLng(
+        coordinates.lat,
+        coordinates.lng - distance / (111320 * Math.cos(coordinates.lat * (Math.PI / 180)))
+      ));
 
-      mapRef.current.fitBounds(bounds);
+      // Appliquer un padding pour éviter que le cercle ne touche les bords de la carte
+      mapRef.current.fitBounds(bounds, 50); // 50 pixels de padding
     }
-  }, [form.watch("maxDistance"), isLoaded]);
+  }, [form.watch("maxDistance"), isLoaded, coordinates]);
 
   // Mise à jour des dates dans le formulaire quand le range date change
   useEffect(() => {
@@ -286,11 +307,42 @@ export default function CreateRentalRequest() {
       const place = autocomplete.getPlace();
       if (place.geometry) {
         const location = place.geometry.location;
-        setCoordinates({
+        const newCoordinates = {
           lat: location?.lat() || 0,
           lng: location?.lng() || 0,
-        });
+        };
+        setCoordinates(newCoordinates);
         form.setValue("departureCity", place.formatted_address || "");
+        
+        // Assurer que le cercle est correctement centré après la sélection d'une nouvelle ville
+        if (mapRef.current) {
+          const distance = form.getValues("maxDistance") * 1000;
+          const bounds = new window.google.maps.LatLngBounds();
+          
+          // Centre
+          bounds.extend(new google.maps.LatLng(newCoordinates.lat, newCoordinates.lng));
+          
+          // Points cardinaux
+          bounds.extend(new google.maps.LatLng(
+            newCoordinates.lat + distance / 111320, 
+            newCoordinates.lng
+          ));
+          bounds.extend(new google.maps.LatLng(
+            newCoordinates.lat - distance / 111320, 
+            newCoordinates.lng
+          ));
+          bounds.extend(new google.maps.LatLng(
+            newCoordinates.lat,
+            newCoordinates.lng + distance / (111320 * Math.cos(newCoordinates.lat * (Math.PI / 180)))
+          ));
+          bounds.extend(new google.maps.LatLng(
+            newCoordinates.lat,
+            newCoordinates.lng - distance / (111320 * Math.cos(newCoordinates.lat * (Math.PI / 180)))
+          ));
+          
+          // Appliquer un padding
+          mapRef.current.fitBounds(bounds, 50);
+        }
       } else {
         toast({
           title: "Erreur",
