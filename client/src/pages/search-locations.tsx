@@ -473,28 +473,38 @@ export default function SearchLocations() {
                   {user?.isLandlord && propertyInfo?.address && (
                     <div className="space-y-2 border-t pt-4">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="proximity-filter" className="font-medium">
-                          Filtrer par proximité à mon bien
+                        <Label htmlFor="filter-by-proximity" className="font-medium text-pink-700 flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          Filtrer les demandes par proximité
                         </Label>
                         <Switch
-                          id="proximity-filter"
+                          id="filter-by-proximity"
                           checked={filterByProximity}
                           onCheckedChange={setFilterByProximity}
+                          className="data-[state=checked]:bg-pink-600"
                         />
                       </div>
+                      
                       <div className="flex items-center gap-2 text-sm">
                         <Home className="h-4 w-4 text-gray-500" />
                         <span className="text-gray-600 truncate" title={propertyInfo.address}>
                           {propertyInfo.address}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500">
-                        Ne montrer que les demandes où votre bien est à une distance acceptable pour les locataires
-                      </p>
+                      
+                      <div className="bg-pink-50 p-3 rounded-md border border-pink-100 mt-2">
+                        <p className="text-sm text-pink-800">
+                          <strong>Ce filtre affiche uniquement</strong> les demandes pour lesquelles votre propriété se trouve dans le rayon maximum défini par les locataires.
+                        </p>
+                        <p className="text-xs text-pink-700 mt-1">
+                          L'activation de ce filtre masque les demandes incompatibles avec les contraintes de distance des locataires.
+                        </p>
+                      </div>
+                      
                       {loadingGeocode && (
-                        <div className="flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
-                          <span className="text-xs text-gray-500">Calcul des distances en cours...</span>
+                        <div className="flex items-center justify-center mt-2 p-2 bg-gray-50 rounded-md">
+                          <Loader2 className="h-4 w-4 animate-spin text-pink-500 mr-2" />
+                          <span className="text-sm text-gray-700">Calcul des distances en cours...</span>
                         </div>
                       )}
                     </div>
@@ -573,16 +583,23 @@ export default function SearchLocations() {
                     )}
                   >
                     <CardHeader className="p-3 flex-none">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-base font-semibold">
-                          <div className="flex items-center">
-                            <MapPin className="h-4 w-4 mr-1 text-pink-500" />
-                            {request.departureCity}
-                          </div>
-                          {existingOffer && (
-                            <span className="ml-2 text-xs text-gray-500">(Offre envoyée)</span>
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base font-semibold">
+                            <div className="flex items-center">
+                              <MapPin className="h-4 w-4 mr-1 text-pink-500" />
+                              {request.departureCity}
+                              {existingOffer && (
+                                <span className="ml-2 text-xs text-gray-500">(Offre envoyée)</span>
+                              )}
+                            </div>
+                          </CardTitle>
+                          {distance !== null && propertyCoords && (
+                            <Badge className={distance <= request.maxDistance ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                              {distance <= request.maxDistance ? 'Dans le rayon' : 'Hors rayon'}
+                            </Badge>
                           )}
-                        </CardTitle>
+                        </div>
                         <span className="text-sm text-gray-500">
                           {new Date(request.startDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - {new Date(request.endDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
                         </span>
