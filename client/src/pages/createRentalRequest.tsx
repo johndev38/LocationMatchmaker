@@ -191,10 +191,10 @@ export default function CreateRentalRequest() {
     lng: 1.888334,
   });
   const [dateRange, setDateRange] = useState<{
-    from: Date;
+    from: Date | undefined;
     to: Date | undefined;
   }>({
-    from: new Date(),
+    from: undefined,
     to: undefined,
   });
   const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
@@ -221,8 +221,8 @@ export default function CreateRentalRequest() {
       pets: 0,
       maxBudget: 1000,
       amenities: [],
-      startDate: new Date(),
-      endDate: new Date(new Date().setDate(new Date().getDate() + 7)), // 1 semaine par défaut
+      startDate: "" as any, // Conversion pour gérer le type
+      endDate: "" as any, // Conversion pour gérer le type
     },
   });
 
@@ -294,10 +294,12 @@ export default function CreateRentalRequest() {
   // Mise à jour des dates dans le formulaire quand le range date change
   useEffect(() => {
     if (dateRange.from) {
-      form.setValue("startDate", dateRange.from);
+      // Conversion de Date en format string pour le backend
+      form.setValue("startDate", dateRange.from.toISOString() as any);
     }
     if (dateRange.to) {
-      form.setValue("endDate", dateRange.to);
+      // Conversion de Date en format string pour le backend
+      form.setValue("endDate", dateRange.to.toISOString() as any);
     }
   }, [dateRange, form]);
 
@@ -359,8 +361,7 @@ export default function CreateRentalRequest() {
       form.getValues("departureCity") && 
       selectedTypes.length > 0 && 
       form.getValues("maxBudget") && 
-      form.getValues("startDate") && 
-      form.getValues("endDate");
+      dateRange.from && dateRange.to;
     
     return hasRequiredFields;
   };
@@ -510,7 +511,7 @@ export default function CreateRentalRequest() {
                               variant="outline"
                               className={cn(
                                 "w-full justify-start text-left font-normal h-12",
-                                !dateRange && "text-muted-foreground"
+                                !dateRange.from && !dateRange.to && "text-muted-foreground"
                               )}
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
@@ -532,12 +533,30 @@ export default function CreateRentalRequest() {
                             <Calendar
                               initialFocus
                               mode="range"
-                              defaultMonth={dateRange?.from}
-                              selected={dateRange}
+                              defaultMonth={dateRange?.from || new Date()}
+                              selected={{
+                                from: dateRange.from || undefined,
+                                to: dateRange.to || undefined
+                              }}
                               onSelect={(range) => {
-                                setDateRange(range || { from: new Date(), to: undefined });
-                                if (range?.from) form.setValue("startDate", range.from);
-                                if (range?.to) form.setValue("endDate", range.to);
+                                if (!range) {
+                                  // Si aucune plage n'est sélectionnée, garder les valeurs actuelles
+                                  return;
+                                }
+                                
+                                // Mise à jour de l'état dateRange avec les valeurs sélectionnées
+                                setDateRange({
+                                  from: range.from,
+                                  to: range.to
+                                });
+                                
+                                // Mise à jour du formulaire si les dates sont définies
+                                if (range.from) {
+                                  form.setValue("startDate", range.from.toISOString() as any);
+                                }
+                                if (range.to) {
+                                  form.setValue("endDate", range.to.toISOString() as any);
+                                }
                               }}
                               numberOfMonths={2}
                               locale={fr}
