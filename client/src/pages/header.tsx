@@ -9,6 +9,30 @@ import NotificationCenter from "@/components/NotificationCenter";
 export default function Header() {
   const { user, logoutMutation } = useAuth();
 
+  const userNavItems = [
+    {
+      title: "Mon profil",
+      href: "/my-profile",
+    },
+    {
+      title: "Mes recherches",
+      href: "/myListings",
+    },
+    {
+      title: "Mes offres",
+      href: "/landlord-offers",
+    },
+    {
+      title: "Mes contrats",
+      href: "/contracts",
+    },
+    {
+      title: "Déconnexion",
+      href: "#",
+      onClick: () => logoutMutation.mutate(),
+    },
+  ];
+
   return (
     <header className="bg-white/80 backdrop-blur-md shadow-md fixed w-full top-0 left-0 z-50 h-16 flex items-center">
       <div className="container mx-auto flex justify-between items-center p-4">

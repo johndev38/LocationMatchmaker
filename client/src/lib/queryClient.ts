@@ -10,17 +10,45 @@ async function throwIfResNotOk(res: Response) {
 export async function apiRequest(
   method: string,
   url: string,
-  data?: unknown | undefined,
+  body?: any,
+  headers: HeadersInit = {}
 ): Promise<Response> {
-  const res = await fetch(url, {
+  // Vérifier si l'utilisateur est authentifié via la session
+  const defaultHeaders: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  // Nous utilisons uniquement credentials: 'include' pour transmettre les cookies de session
+  // et n'utilisons pas de token Bearer qui causait l'erreur 401
+  
+  const mergedHeaders = { ...defaultHeaders, ...headers };
+  
+  const options: RequestInit = {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-
-  await throwIfResNotOk(res);
-  return res;
+    headers: mergedHeaders,
+    credentials: 'include', // Inclure les cookies pour l'authentification par session
+  };
+  
+  if (body && method !== 'GET' && method !== 'HEAD') {
+    options.body = JSON.stringify(body);
+  }
+  
+  try {
+    const response = await fetch(url, options);
+    
+    if (response.status === 401) {
+      console.error("Erreur d'authentification - Session expirée ou utilisateur non connecté");
+      // Rediriger vers la page de connexion si l'utilisateur n'est pas authentifié
+      if (window.location.pathname !== '/auth') {
+        window.location.href = '/auth';
+      }
+    }
+    
+    return response;
+  } catch (error) {
+    console.error("Erreur lors de la requête API:", error);
+    throw error;
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

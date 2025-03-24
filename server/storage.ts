@@ -238,24 +238,40 @@ export class DatabaseStorage implements IStorage {
   async updatePropertyOfferStatus(
     offerId: number,
     status: string,
-    landlordId: number
+    userId: number
   ): Promise<PropertyOffer> {
+    // Récupérer l'offre d'abord pour vérifier qu'elle existe
+    const [existingOffer] = await db
+      .select()
+      .from(propertyOffers)
+      .where(eq(propertyOffers.id, offerId));
+    
+    if (!existingOffer) {
+      throw new Error(`Offre avec l'ID ${offerId} non trouvée`);
+    }
+
+    // Mettre à jour l'offre, sans vérifier le landlordId (pour permettre aux locataires de mettre à jour)
     const [offer] = await db
       .update(propertyOffers)
-      .set({ status })
-      .where(
-        and(
-          eq(propertyOffers.id, offerId),
-          eq(propertyOffers.landlordId, landlordId)
-        )
-      )
+      .set({ 
+        status: status as "pending" | "accepted" | "rejected" 
+      })
+      .where(eq(propertyOffers.id, offerId))
       .returning();
+    
+    if (!offer) {
+      throw new Error(`Erreur lors de la mise à jour de l'offre ${offerId}`);
+    }
     
     // Récupérer la demande associée à cette offre
     const [request] = await db
       .select()
       .from(rentalRequests)
       .where(eq(rentalRequests.id, offer.requestId));
+    
+    if (!request) {
+      throw new Error(`Demande associée à l'offre ${offerId} non trouvée`);
+    }
     
     // Créer une notification pour l'utilisateur qui a fait la demande
     if (status === "accepted" || status === "rejected") {

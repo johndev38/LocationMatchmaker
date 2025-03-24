@@ -151,7 +151,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Route pour accepter ou refuser une offre
   app.put("/api/property-offers/:offerId/status", async (req, res) => {
-    if (!req.isAuthenticated() || !req.user!.isLandlord) {
+    // Vérifier uniquement l'authentification, pas le rôle de propriétaire
+    if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
 
@@ -163,9 +164,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
+      // Passer l'ID de l'utilisateur connecté à la fonction
       const offer = await storage.updatePropertyOfferStatus(offerId, status, req.user!.id);
       res.json(offer);
     } catch (error) {
+      console.error("Erreur lors de la mise à jour du statut de l'offre:", error);
       res.status(500).json({ error: "Erreur lors de la mise à jour du statut de l'offre" });
     }
   });
