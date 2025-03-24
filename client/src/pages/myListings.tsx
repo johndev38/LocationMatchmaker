@@ -18,7 +18,9 @@ import {
   Plus,
   Clock,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  ArrowLeft,
+  ArrowRight
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,16 +29,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogClose
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import useEmblaCarousel from "embla-carousel-react";
 
 interface Property {
   title?: string;
@@ -58,15 +54,54 @@ interface Offer {
   };
 }
 
+interface RentalListing {
+  id: number;
+  status: string;
+  departureCity: string;
+  startDate: string;
+  endDate: string;
+  adults: number;
+  children: number;
+  babies: number;
+  pets: number;
+  maxDistance: number;
+  maxBudget: number;
+  locationType: string[];
+  amenities: string[];
+}
+
 export default function MyListings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("active");
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
-  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
-  const [selectedListing, setSelectedListing] = useState<any | null>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<number | null>(null);
+  const [photoGalleryOpen, setPhotoGalleryOpen] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [selectedPhotoOffer, setSelectedPhotoOffer] = useState<Offer | null>(null);
+  const [emblaRef, emblaApi] = useEmblaCarousel({ startIndex: currentPhotoIndex });
+
+  // Mettre à jour le carousel lorsque l'index change
+  useEffect(() => {
+    if (emblaApi && photoGalleryOpen) {
+      emblaApi.scrollTo(currentPhotoIndex);
+    }
+  }, [emblaApi, currentPhotoIndex, photoGalleryOpen]);
+
+  // Écouter les changements de slide du carousel
+  useEffect(() => {
+    if (!emblaApi) return;
+
+    const onSelect = () => {
+      setCurrentPhotoIndex(emblaApi.selectedScrollSnap());
+    };
+
+    emblaApi.on("select", onSelect);
+    return () => {
+      emblaApi.off("select", onSelect);
+    };
+  }, [emblaApi]);
 
   // Récupérer les annonces de l'utilisateur
   const { data: userListings = [], isLoading: loadingListings } = useQuery({
@@ -84,7 +119,7 @@ export default function MyListings() {
     queryKey: ["allPropertyOffers"],
     queryFn: async () => {
       const allOffers = await Promise.all(
-        userListings.map(async (listing: any) => {
+        userListings.map(async (listing: RentalListing) => {
           const response = await apiRequest("GET", `/api/property-offers/${listing.id}`);
           if (!response.ok) return [];
           const offers = await response.json();
@@ -145,7 +180,7 @@ export default function MyListings() {
   });
 
   // Filtrer les annonces selon l'onglet actif
-  const filteredListings = userListings.filter((listing: any) => {
+  const filteredListings = userListings.filter((listing: RentalListing) => {
     if (activeTab === "active") return listing.status === "active";
     if (activeTab === "inactive") return listing.status === "inactive" || listing.status === "expired";
     return true; // 'all' tab
@@ -156,10 +191,29 @@ export default function MyListings() {
     ? allPropertyOffers.filter((offer: Offer) => offer.requestId === selectedRequestId)
     : allPropertyOffers;
 
-  const openDetailsDialog = (offer: Offer, listing: any) => {
-    setSelectedOffer(offer);
-    setSelectedListing(listing);
-    setDetailsDialogOpen(true);
+  // Trouver l'offre sélectionnée
+  const selectedOffer = selectedOfferId
+    ? displayedOffers.find((offer: Offer) => offer.id === selectedOfferId)
+    : null;
+    
+  // Trouver la demande correspondant à l'offre sélectionnée
+  const selectedListing = selectedOffer
+    ? userListings.find((listing: RentalListing) => listing.id === selectedOffer.requestId)
+    : null;
+
+  // Fonction pour sélectionner une offre
+  const handleSelectOffer = (offerId: number) => {
+    setSelectedOfferId(offerId === selectedOfferId ? null : offerId);
+  };
+
+  // Fonction pour ouvrir la galerie photo
+  const openPhotoGallery = (offer: Offer, index = 0, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setSelectedPhotoOffer(offer);
+    setCurrentPhotoIndex(index);
+    setPhotoGalleryOpen(true);
   };
 
   if (loadingListings) {
@@ -176,6 +230,67 @@ export default function MyListings() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
       <Header />
+
+      {/* Photo Gallery Dialog */}
+      <Dialog open={photoGalleryOpen} onOpenChange={setPhotoGalleryOpen}>
+        <DialogContent className="sm:max-w-4xl p-0 bg-black/95" aria-describedby="photo-gallery-description">
+          <div className="sr-only" id="photo-gallery-description">Galerie photos de la propriété</div>
+          <div className="sr-only">
+            <DialogTitle>Photos de la propriété</DialogTitle>
+          </div>
+          <div className="relative">
+            <Button 
+              variant="outline" 
+              onClick={() => setPhotoGalleryOpen(false)} 
+              className="absolute top-4 right-4 z-50 rounded-full bg-black/70 border-none text-white hover:bg-black/90"
+            >
+              <XCircle className="h-5 w-5" />
+            </Button>
+            
+            {selectedPhotoOffer?.property?.photos && selectedPhotoOffer.property.photos.length > 0 && (
+              <div className="w-full overflow-hidden">
+                <div className="overflow-hidden" ref={emblaRef}>
+                  <div className="flex">
+                    {selectedPhotoOffer.property.photos.map((photo: string, index: number) => (
+                      <div 
+                        key={index} 
+                        className="min-w-0 flex-[0_0_100%] h-[80vh] relative"
+                      >
+                        <img
+                          src={photo}
+                          alt={`Photo ${index + 1} de la propriété`}
+                          className="absolute inset-0 w-full h-full object-contain"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 text-white hover:bg-black/70 z-10"
+                  onClick={() => emblaApi?.scrollPrev()}
+                >
+                  <ArrowLeft className="h-6 w-6" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 text-white hover:bg-black/70 z-10"
+                  onClick={() => emblaApi?.scrollNext()}
+                >
+                  <ArrowRight className="h-6 w-6" />
+                </Button>
+              </div>
+            )}
+            
+            {/* Compteur de photos */}
+            {selectedPhotoOffer?.property?.photos && selectedPhotoOffer.property.photos.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 px-3 py-1 rounded-full text-white text-sm">
+                {currentPhotoIndex + 1} / {selectedPhotoOffer.property.photos.length}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="container mx-auto px-4 py-8 pt-24 max-w-6xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -253,7 +368,7 @@ export default function MyListings() {
               </div>
             ) : (
               <div className="space-y-6">
-                {filteredListings.map((listing: any) => {
+                {filteredListings.map((listing: RentalListing) => {
                   const listingOffers = allPropertyOffers.filter((o: Offer) => o.requestId === listing.id);
                   
                   return (
@@ -387,125 +502,170 @@ export default function MyListings() {
                               <p className="text-gray-500 text-sm">Les propriétaires vous contacteront dès qu'ils auront des logements qui correspondent à vos critères</p>
                             </div>
                           ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              {listingOffers.map((offer: Offer) => (
-                                <Card key={offer.id} className="overflow-hidden border-0 shadow-sm hover:shadow-md transition-all">
-                                  {/* Carrousel de photos */}
-                                  {offer.property?.photos && offer.property.photos.length > 0 ? (
-                                    <div className="relative h-48">
-                                      <Carousel className="w-full">
-                                        <CarouselContent>
-                                          {offer.property.photos.map((photo: string, index: number) => (
-                                            <CarouselItem key={index}>
-                                              <div className="h-48 w-full relative">
-                                                <img
-                                                  src={photo}
-                                                  alt={`Photo ${index + 1}`}
-                                                  className="absolute inset-0 w-full h-full object-cover rounded-t-lg"
-                                                />
+                            <div className="space-y-8">
+                              {/* Grille des offres simplifiées */}
+                              <div className="grid grid-cols-1 gap-4">
+                                {listingOffers.map((offer: Offer) => {
+                                  const isSelected = selectedOfferId === offer.id;
+                                  const matchCount = listing.amenities?.filter((amenity: string) => 
+                                    offer.availableAmenities?.includes(amenity)
+                                  ).length || 0;
+                                  const totalCount = listing.amenities?.length || 0;
+                                  const percentage = totalCount > 0 ? Math.round((matchCount / totalCount) * 100) : 0;
+                                  
+                                  return (
+                                    <Card 
+                                      key={offer.id} 
+                                      className={`overflow-hidden border-0 shadow-sm hover:shadow-md transition-all cursor-pointer ${isSelected ? 'ring-2 ring-pink-500' : ''}`}
+                                      onClick={() => handleSelectOffer(offer.id)}
+                                    >
+                                      <div className="flex flex-col md:flex-row">
+                                        {/* Miniature de photo */}
+                                        {offer.property?.photos && offer.property.photos.length > 0 ? (
+                                          <div 
+                                            className="h-48 md:w-1/4 bg-gray-100 relative cursor-pointer overflow-hidden group"
+                                            onClick={(e) => openPhotoGallery(offer, 0, e)}
+                                          >
+                                            <img
+                                              src={offer.property.photos[0]}
+                                              alt="Aperçu de la propriété"
+                                              className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                            />
+                                            {offer.property.photos.length > 1 && (
+                                              <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                                                +{offer.property.photos.length - 1}
                                               </div>
-                                            </CarouselItem>
-                                          ))}
-                                        </CarouselContent>
-                                        <CarouselPrevious className="left-2" />
-                                        <CarouselNext className="right-2" />
-                                      </Carousel>
-                                    </div>
-                                  ) : (
-                                    <div className="h-48 bg-gray-100 flex items-center justify-center rounded-t-lg">
-                                      <Home className="h-8 w-8 text-gray-300" />
-                                    </div>
-                                  )}
+                                            )}
+                                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                              <span className="text-white text-sm font-medium">Voir les photos</span>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="h-48 md:w-1/4 bg-gray-100 flex items-center justify-center">
+                                            <Home className="h-10 w-10 text-gray-300" />
+                                          </div>
+                                        )}
 
-                                  <CardHeader className="pb-3">
-                                    <div className="flex items-start justify-between">
-                                      <div>
-                                        <CardTitle className="text-lg font-semibold text-gray-800">
-                                          {offer.property?.title || "Propriété sans titre"}
-                                        </CardTitle>
-                                        <CardDescription className="flex items-center gap-1 mt-1">
-                                          <MapPin className="h-3 w-3" />
-                                          {offer.property?.address}
-                                        </CardDescription>
-                                      </div>
-                                      <Badge
-                                        className={
-                                          offer.status === "accepted"
-                                            ? "bg-green-100 text-green-800 hover:bg-green-100"
-                                            : offer.status === "rejected"
-                                            ? "bg-rose-100 text-rose-800 hover:bg-rose-100"
-                                            : "bg-orange-100 text-orange-800 hover:bg-orange-100"
-                                        }
-                                      >
-                                        {offer.status === "pending"
-                                          ? "En attente"
-                                          : offer.status === "accepted"
-                                          ? "Acceptée"
-                                          : "Refusée"}
-                                      </Badge>
-                                    </div>
-                                  </CardHeader>
+                                        <div className="md:w-3/4">
+                                          <CardContent className="p-4">
+                                            <div className="flex justify-between items-start mb-3">
+                                              <div>
+                                                <h4 className="text-xl font-semibold text-gray-800">{offer.property?.title || "Propriété"}</h4>
+                                                <p className="text-gray-600 flex items-center gap-1 mt-1">
+                                                  <MapPin className="h-4 w-4" />
+                                                  {offer.property?.address}
+                                                </p>
+                                              </div>
+                                              <div className="text-right">
+                                                <p className="text-2xl font-bold text-pink-600">{offer.price} €</p>
+                                                <Badge
+                                                  className={
+                                                    offer.status === "accepted"
+                                                      ? "bg-green-100 text-green-800"
+                                                      : offer.status === "rejected"
+                                                      ? "bg-rose-100 text-rose-800"
+                                                      : "bg-orange-100 text-orange-800"
+                                                  }
+                                                >
+                                                  {offer.status === "pending"
+                                                    ? "En attente"
+                                                    : offer.status === "accepted"
+                                                    ? "Acceptée"
+                                                    : "Refusée"}
+                                                </Badge>
+                                              </div>
+                                            </div>
 
-                                  <CardContent className="pb-3">
-                                    <div className="flex justify-between items-center mb-3">
-                                      <p className="text-2xl font-bold text-pink-600">{offer.price} € <span className="text-sm font-normal text-gray-500">/ mois</span></p>
-                                      
-                                      <div className="flex items-center gap-2">
-                                        <Avatar className="h-6 w-6">
-                                          <AvatarImage src={offer.owner?.avatar} />
-                                          <AvatarFallback className="bg-pink-100 text-pink-600">{offer.owner?.name?.charAt(0) || "U"}</AvatarFallback>
-                                        </Avatar>
-                                        <span className="text-sm text-gray-600">{offer.owner?.name || "Propriétaire"}</span>
-                                      </div>
-                                    </div>
-                                    
-                                    <p className="text-gray-700 text-sm mb-4 line-clamp-2">{offer.description}</p>
-                                    
-                                    {offer.availableAmenities && offer.availableAmenities.length > 0 && (
-                                      <div>
-                                        <p className="text-xs text-gray-500 mb-2">Prestations incluses</p>
-                                        <div className="flex flex-wrap gap-2 mb-3">
-                                          {listing.amenities && listing.amenities.map((amenity: string) => {
-                                            const isIncluded = offer.availableAmenities?.includes(amenity);
-                                            return (
-                                              <Badge
-                                                key={amenity}
-                                                variant="outline"
-                                                className={`capitalize text-xs inline-flex items-center gap-1 ${isIncluded 
-                                                  ? 'bg-green-50 text-green-700 border-green-200' 
-                                                  : 'bg-gray-50 text-gray-500 border-gray-200'}`}
-                                              >
-                                                {isIncluded ? (
-                                                  <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
-                                                ) : (
-                                                  <XCircle className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                                                )}
-                                                {amenity.replace(/_/g, " ")}
-                                              </Badge>
-                                            );
-                                          })}
+                                            <div className="mb-4">
+                                              <p className="text-sm text-gray-700">{offer.description}</p>
+                                            </div>
+                                            
+                                            {/* Compteur de correspondance */}
+                                            <div className="bg-gray-50 p-3 rounded-md mb-4">
+                                              <div className="flex justify-between items-center mb-2">
+                                                <p className="text-sm font-medium text-gray-700">Satisfaction de vos critères</p>
+                                                <p className={`text-sm font-semibold ${
+                                                  percentage >= 80 ? 'text-green-600' : 
+                                                  percentage >= 50 ? 'text-amber-600' : 
+                                                  'text-red-600'
+                                                }`}>
+                                                  {matchCount}/{totalCount} ({percentage}%)
+                                                </p>
+                                              </div>
+                                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div 
+                                                  className={`h-2 rounded-full ${
+                                                    percentage >= 80 ? 'bg-green-500' : 
+                                                    percentage >= 50 ? 'bg-amber-500' : 
+                                                    'bg-red-500'
+                                                  }`} 
+                                                  style={{ width: `${percentage}%` }}
+                                                ></div>
+                                              </div>
+                                            </div>
+
+                                            {/* Aménités qui correspondent */}
+                                            <div className="mb-4">
+                                              <h5 className="text-sm font-medium text-gray-700 mb-2">Aménités disponibles</h5>
+                                              <div className="flex flex-wrap gap-2">
+                                                {listing.amenities && listing.amenities.map((amenity: string) => {
+                                                  const isIncluded = offer.availableAmenities?.includes(amenity);
+                                                  return (
+                                                    <Badge
+                                                      key={amenity}
+                                                      variant="outline"
+                                                      className={`capitalize text-xs inline-flex items-center gap-1 ${isIncluded 
+                                                        ? 'bg-green-50 text-green-700 border-green-200' 
+                                                        : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                                                    >
+                                                      {isIncluded ? (
+                                                        <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                                      ) : (
+                                                        <XCircle className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                                                      )}
+                                                      {amenity.replace(/_/g, " ")}
+                                                    </Badge>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                            
+                                            {offer.status === "pending" && (
+                                              <div className="flex justify-end gap-2 mt-4">
+                                                <Button 
+                                                  variant="outline"
+                                                  className="text-sm"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    updateOfferStatusMutation.mutate({ 
+                                                      offerId: offer.id, 
+                                                      status: "rejected" 
+                                                    });
+                                                  }}
+                                                >
+                                                  Refuser
+                                                </Button>
+                                                <Button 
+                                                  className="text-sm bg-pink-600 hover:bg-pink-700"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    updateOfferStatusMutation.mutate({ 
+                                                      offerId: offer.id, 
+                                                      status: "accepted" 
+                                                    });
+                                                  }}
+                                                >
+                                                  Accepter
+                                                </Button>
+                                              </div>
+                                            )}
+                                          </CardContent>
                                         </div>
                                       </div>
-                                    )}
-                                  </CardContent>
-
-                                  <CardFooter className="flex justify-end gap-2 pt-3 border-t bg-gray-50">
-                                    {offer.status === "pending" && (
-                                      <>
-                                        <Button 
-                                          size="sm" 
-                                          variant="outline"
-                                          className="text-xs h-8"
-                                          onClick={() => openDetailsDialog(offer, listing)}
-                                        >
-                                          <ExternalLink className="h-3 w-3 mr-1" /> 
-                                          Détails
-                                        </Button>
-                                      </>
-                                    )}
-                                  </CardFooter>
-                                </Card>
-                              ))}
+                                    </Card>
+                                  );
+                                })}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -518,214 +678,6 @@ export default function MyListings() {
           </Tabs>
         </div>
       </div>
-
-      {/* Dialog de détails */}
-      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Détails de l'offre</DialogTitle>
-            <DialogDescription>
-              Comparaison des aménités demandées et celles disponibles
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedOffer && selectedListing && (
-            <div className="pt-4 space-y-6">
-              {/* En-tête avec info de base */}
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-semibold">{selectedOffer.property?.title || "Propriété"}</h3>
-                  <p className="text-sm text-gray-500 flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
-                    {selectedOffer.property?.address}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-pink-600">{selectedOffer.price} €</p>
-                  <Badge 
-                    className={selectedOffer.status === "accepted" 
-                      ? "bg-green-100 text-green-800" 
-                      : selectedOffer.status === "rejected" 
-                      ? "bg-rose-100 text-rose-800" 
-                      : "bg-orange-100 text-orange-800"}
-                  >
-                    {selectedOffer.status === "pending" 
-                      ? "En attente" 
-                      : selectedOffer.status === "accepted" 
-                      ? "Acceptée" 
-                      : "Refusée"}
-                  </Badge>
-                </div>
-              </div>
-              
-              <Separator />
-              
-              {/* Détails de la demande */}
-              <div>
-                <h4 className="font-semibold mb-2">Détails de votre demande</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                  <div>
-                    <p className="text-gray-500">Ville</p>
-                    <p className="font-medium">{selectedListing.departureCity}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Type</p>
-                    <p className="font-medium">{selectedListing.locationType.join(", ")}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Budget max</p>
-                    <p className="font-medium">{selectedListing.maxBudget} €</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Distance max</p>
-                    <p className="font-medium">{selectedListing.maxDistance} km</p>
-                  </div>
-                </div>
-              </div>
-              
-              <Separator />
-              
-              {/* Comparaison détaillée des aménités */}
-              <div>
-                <h4 className="font-semibold mb-3">Aménités demandées</h4>
-                <div className="bg-gray-50 p-4 rounded-md">
-                  {/* Compteur de correspondance */}
-                  {(() => {
-                    const matchCount = selectedListing.amenities.filter((amenity: string) => 
-                      selectedOffer.availableAmenities?.includes(amenity)
-                    ).length;
-                    const totalCount = selectedListing.amenities.length;
-                    const percentage = Math.round((matchCount / totalCount) * 100);
-                    
-                    return (
-                      <div className="mb-4">
-                        <div className="flex justify-between items-center mb-2">
-                          <p className="text-sm font-medium text-gray-700">Satisfaction de vos critères</p>
-                          <p className={`text-sm font-semibold ${
-                            percentage >= 80 ? 'text-green-600' : 
-                            percentage >= 50 ? 'text-amber-600' : 
-                            'text-red-600'
-                          }`}>
-                            {matchCount}/{totalCount} ({percentage}%)
-                          </p>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full ${
-                              percentage >= 80 ? 'bg-green-500' : 
-                              percentage >= 50 ? 'bg-amber-500' : 
-                              'bg-red-500'
-                            }`}
-                            style={{ width: `${percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  
-                  {/* Tableau des aménités */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {selectedListing.amenities && selectedListing.amenities.map((amenity: string) => {
-                      const isIncluded = selectedOffer.availableAmenities?.includes(amenity);
-                      
-                      return (
-                        <div 
-                          key={amenity}
-                          className={`flex items-center gap-2 p-2 rounded ${isIncluded 
-                            ? 'bg-green-50 border border-green-100' 
-                            : 'bg-red-50 border border-red-100'
-                          }`}
-                        >
-                          <div className={`rounded-full p-1 ${isIncluded ? 'bg-green-100' : 'bg-red-100'}`}>
-                            {isIncluded ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
-                            ) : (
-                              <XCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium capitalize">{amenity.replace(/_/g, " ")}</p>
-                            <p className={`text-xs ${isIncluded ? 'text-green-600' : 'text-red-600'}`}>
-                              {isIncluded ? "✓ Inclus dans l'offre" : "✗ Non disponible"}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                {/* Afficher les aménités supplémentaires proposées par le propriétaire */}
-                {selectedOffer.availableAmenities && selectedOffer.availableAmenities.some(amenity => !selectedListing.amenities.includes(amenity)) && (
-                  <div className="mt-4">
-                    <h5 className="text-sm font-medium text-gray-700 mb-2">Aménités supplémentaires offertes</h5>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedOffer.availableAmenities
-                        .filter(amenity => !selectedListing.amenities.includes(amenity))
-                        .map((amenity: string) => (
-                          <Badge 
-                            key={amenity} 
-                            className="bg-blue-50 text-blue-700 border border-blue-200 capitalize inline-flex items-center gap-1"
-                          >
-                            <Plus className="h-3 w-3 flex-shrink-0" />
-                            {amenity.replace(/_/g, " ")}
-                          </Badge>
-                        ))
-                      }
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <Separator />
-              
-              {/* Description de l'offre */}
-              <div>
-                <h4 className="font-semibold mb-2">Description de l'offre</h4>
-                <p className="text-gray-700 text-sm">{selectedOffer.description}</p>
-              </div>
-              
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-2">
-                {selectedOffer.status === "pending" && (
-                  <>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      className="text-sm"
-                      onClick={() => {
-                        updateOfferStatusMutation.mutate({ offerId: selectedOffer.id, status: "rejected" });
-                        setDetailsDialogOpen(false);
-                      }}
-                    >
-                      Refuser
-                    </Button>
-                    <Button 
-                      size="sm"
-                      className="text-sm bg-pink-600 hover:bg-pink-700"
-                      onClick={() => {
-                        updateOfferStatusMutation.mutate({ offerId: selectedOffer.id, status: "accepted" });
-                        setDetailsDialogOpen(false);
-                      }}
-                    >
-                      Accepter
-                    </Button>
-                  </>
-                )}
-                <DialogClose asChild>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="text-sm"
-                  >
-                    Fermer
-                  </Button>
-                </DialogClose>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
