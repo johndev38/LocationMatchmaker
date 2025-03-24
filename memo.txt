@@ -5,3 +5,8 @@ un compteur des offre recu par une annonce
 il faut que quand le proprietaire fait une offre, il y a un tableau qui fait matché les améneties du locataire et du propriétaire.
 
 
+
+
+
+
+search locatin ne se mets pas  ajours quand on fait une offre

@@ -39,6 +39,7 @@ import {
   Marker,
   Circle,
   Autocomplete,
+  Libraries
 } from "@react-google-maps/api";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -143,6 +144,9 @@ const mapContainerStyle = {
   boxShadow: "0 4px 8px rgba(0, 0, 0, 0.1)",
 };
 
+// Définir les bibliothèques Google Maps comme constante statique en dehors du composant
+const googleMapsLibraries: Libraries = ["places"];
+
 // Catégories d'aménités pour une meilleure organisation
 const amenityCategories = {
   "Confort essentiel": [
@@ -205,7 +209,7 @@ export default function CreateRentalRequest() {
   // Configuration de l'API Google Maps
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
-    libraries: ["places"],
+    libraries: googleMapsLibraries,
   });
 
   // Configuration du formulaire avec React Hook Form et validation par Zod
@@ -232,10 +236,19 @@ export default function CreateRentalRequest() {
   // Mutation React Query pour soumettre la demande
   const createRequestMutation = useMutation({
     mutationFn: async (data: RentalRequest) => {
-      const res = await apiRequest("POST", "/api/rental-requests", data);
-      return await res.json();
+      console.log("Envoi de la requête POST avec données:", data);
+      try {
+        const res = await apiRequest("POST", "/api/rental-requests", data);
+        const responseData = await res.json();
+        console.log("Réponse reçue:", responseData);
+        return responseData;
+      } catch (error) {
+        console.error("Erreur dans mutationFn:", error);
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Mutation réussie, données reçues:", data);
       toast({
         title: "Demande créée",
         description: "Votre demande de location a été enregistrée avec succès.",
@@ -243,9 +256,10 @@ export default function CreateRentalRequest() {
       navigate("/my-listings");
     },
     onError: (error: Error) => {
+      console.error("Erreur dans onError:", error);
       toast({
         title: "Erreur",
-        description: error.message,
+        description: error.message || "Une erreur s'est produite lors de la création de la demande",
         variant: "destructive",
       });
     },
@@ -378,18 +392,44 @@ export default function CreateRentalRequest() {
 
   // Soumission du formulaire
   const handleSubmitForm = (data: RentalRequest) => {
-    if (!isFormValid()) {
+    try {
+      console.log("📝 handleSubmitForm appelé avec:", data);
+      
+      if (!isFormValid()) {
+        console.log("❌ Formulaire invalide, champs manquants:", getMissingFields());
+        toast({
+          title: "Formulaire incomplet",
+          description: "Veuillez remplir tous les champs obligatoires.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log("✅ Formulaire validé, préparation des données");
+      
+      // Préparation des données à envoyer
+      const requestData = {
+        ...data,
+        locationType: selectedTypes,
+        amenities: form.getValues("amenities") || [],
+        // Assurer que les dates sont au bon format
+        startDate: dateRange.from?.toISOString() || "",
+        endDate: dateRange.to?.toISOString() || ""
+      };
+      
+      console.log("📤 Données finales à envoyer:", requestData);
+      
+      // Envoyer la requête directement
+      createRequestMutation.mutate(requestData);
+      
+    } catch (error) {
+      console.error("🔴 Erreur dans handleSubmitForm:", error);
       toast({
-        title: "Formulaire incomplet",
-        description: "Veuillez remplir tous les champs obligatoires.",
+        title: "Erreur",
+        description: "Une erreur inattendue s'est produite lors du traitement de votre demande",
         variant: "destructive",
       });
-      return;
     }
-
-    // Mise à jour des types de location
-    data.locationType = selectedTypes;
-    createRequestMutation.mutate(data);
   };
 
   return (
@@ -793,9 +833,26 @@ export default function CreateRentalRequest() {
                         Précédent
                       </Button>
                       <Button 
-                        type="submit"
+                        type="button"
                         disabled={createRequestMutation.isPending || !isFormValid()}
                         className="bg-pink-600 hover:bg-pink-700 text-white"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          console.log("🔵 Soumission manuelle du formulaire");
+                          
+                          // Créer manuellement l'objet de données
+                          const formData = form.getValues();
+                          console.log("📊 Données du formulaire:", formData);
+                          
+                          // Appeler directement handleSubmitForm avec les données
+                          handleSubmitForm({
+                            ...formData,
+                            locationType: selectedTypes,
+                            amenities: formData.amenities || [],
+                            startDate: dateRange.from?.toISOString() || "",
+                            endDate: dateRange.to?.toISOString() || ""
+                          });
+                        }}
                       >
                         {createRequestMutation.isPending ? (
                           <>

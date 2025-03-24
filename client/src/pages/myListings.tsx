@@ -29,6 +29,14 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogClose
+} from "@/components/ui/dialog";
 
 interface Property {
   title?: string;
@@ -56,6 +64,9 @@ export default function MyListings() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("active");
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
+  const [selectedListing, setSelectedListing] = useState<any | null>(null);
 
   // Récupérer les annonces de l'utilisateur
   const { data: userListings = [], isLoading: loadingListings } = useQuery({
@@ -144,6 +155,12 @@ export default function MyListings() {
   const displayedOffers = selectedRequestId 
     ? allPropertyOffers.filter((offer: Offer) => offer.requestId === selectedRequestId)
     : allPropertyOffers;
+
+  const openDetailsDialog = (offer: Offer, listing: any) => {
+    setSelectedOffer(offer);
+    setSelectedListing(listing);
+    setDetailsDialogOpen(true);
+  };
 
   if (loadingListings) {
     return (
@@ -254,7 +271,7 @@ export default function MyListings() {
                               <CardTitle className="text-xl font-semibold text-gray-800">
                                 {listing.departureCity}
                               </CardTitle>
-                              <CardDescription className="flex flex-wrap items-center gap-2 mt-1">
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
                                 <Badge className={listing.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-100'}>
                                   {listing.status === 'active' ? 'Active' : 'Terminée'}
                                 </Badge>
@@ -262,7 +279,7 @@ export default function MyListings() {
                                   <Calendar className="h-3 w-3" />
                                   {new Date(listing.startDate).toLocaleDateString('fr-FR')} - {new Date(listing.endDate).toLocaleDateString('fr-FR')}
                                 </span>
-                              </CardDescription>
+                              </div>
                             </div>
                           </div>
                           <Button
@@ -447,21 +464,26 @@ export default function MyListings() {
                                     {offer.availableAmenities && offer.availableAmenities.length > 0 && (
                                       <div>
                                         <p className="text-xs text-gray-500 mb-2">Prestations incluses</p>
-                                        <div className="flex flex-wrap gap-1">
-                                          {offer.availableAmenities.slice(0, 3).map((amenity: string) => (
-                                            <Badge
-                                              key={amenity}
-                                              variant="outline"
-                                              className="capitalize text-xs bg-gray-50"
-                                            >
-                                              {amenity.replace(/_/g, " ")}
-                                            </Badge>
-                                          ))}
-                                          {offer.availableAmenities.length > 3 && (
-                                            <span className="text-xs text-gray-500">
-                                              +{offer.availableAmenities.length - 3}
-                                            </span>
-                                          )}
+                                        <div className="flex flex-wrap gap-2 mb-3">
+                                          {listing.amenities && listing.amenities.map((amenity: string) => {
+                                            const isIncluded = offer.availableAmenities?.includes(amenity);
+                                            return (
+                                              <Badge
+                                                key={amenity}
+                                                variant="outline"
+                                                className={`capitalize text-xs inline-flex items-center gap-1 ${isIncluded 
+                                                  ? 'bg-green-50 text-green-700 border-green-200' 
+                                                  : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                                              >
+                                                {isIncluded ? (
+                                                  <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                                ) : (
+                                                  <XCircle className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                                                )}
+                                                {amenity.replace(/_/g, " ")}
+                                              </Badge>
+                                            );
+                                          })}
                                         </div>
                                       </div>
                                     )}
@@ -474,27 +496,13 @@ export default function MyListings() {
                                           size="sm" 
                                           variant="outline"
                                           className="text-xs h-8"
-                                          onClick={() => updateOfferStatusMutation.mutate({ offerId: offer.id, status: "rejected" })}
+                                          onClick={() => openDetailsDialog(offer, listing)}
                                         >
-                                          Refuser
-                                        </Button>
-                                        <Button 
-                                          size="sm"
-                                          className="text-xs h-8 bg-pink-600 hover:bg-pink-700"
-                                          onClick={() => updateOfferStatusMutation.mutate({ offerId: offer.id, status: "accepted" })}
-                                        >
-                                          Accepter
+                                          <ExternalLink className="h-3 w-3 mr-1" /> 
+                                          Détails
                                         </Button>
                                       </>
                                     )}
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline"
-                                      className="text-xs h-8"
-                                    >
-                                      <ExternalLink className="h-3 w-3 mr-1" /> 
-                                      Détails
-                                    </Button>
                                   </CardFooter>
                                 </Card>
                               ))}
@@ -510,6 +518,214 @@ export default function MyListings() {
           </Tabs>
         </div>
       </div>
+
+      {/* Dialog de détails */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Détails de l'offre</DialogTitle>
+            <DialogDescription>
+              Comparaison des aménités demandées et celles disponibles
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedOffer && selectedListing && (
+            <div className="pt-4 space-y-6">
+              {/* En-tête avec info de base */}
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-semibold">{selectedOffer.property?.title || "Propriété"}</h3>
+                  <p className="text-sm text-gray-500 flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {selectedOffer.property?.address}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-bold text-pink-600">{selectedOffer.price} €</p>
+                  <Badge 
+                    className={selectedOffer.status === "accepted" 
+                      ? "bg-green-100 text-green-800" 
+                      : selectedOffer.status === "rejected" 
+                      ? "bg-rose-100 text-rose-800" 
+                      : "bg-orange-100 text-orange-800"}
+                  >
+                    {selectedOffer.status === "pending" 
+                      ? "En attente" 
+                      : selectedOffer.status === "accepted" 
+                      ? "Acceptée" 
+                      : "Refusée"}
+                  </Badge>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              {/* Détails de la demande */}
+              <div>
+                <h4 className="font-semibold mb-2">Détails de votre demande</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">Ville</p>
+                    <p className="font-medium">{selectedListing.departureCity}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Type</p>
+                    <p className="font-medium">{selectedListing.locationType.join(", ")}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Budget max</p>
+                    <p className="font-medium">{selectedListing.maxBudget} €</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Distance max</p>
+                    <p className="font-medium">{selectedListing.maxDistance} km</p>
+                  </div>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              {/* Comparaison détaillée des aménités */}
+              <div>
+                <h4 className="font-semibold mb-3">Aménités demandées</h4>
+                <div className="bg-gray-50 p-4 rounded-md">
+                  {/* Compteur de correspondance */}
+                  {(() => {
+                    const matchCount = selectedListing.amenities.filter((amenity: string) => 
+                      selectedOffer.availableAmenities?.includes(amenity)
+                    ).length;
+                    const totalCount = selectedListing.amenities.length;
+                    const percentage = Math.round((matchCount / totalCount) * 100);
+                    
+                    return (
+                      <div className="mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <p className="text-sm font-medium text-gray-700">Satisfaction de vos critères</p>
+                          <p className={`text-sm font-semibold ${
+                            percentage >= 80 ? 'text-green-600' : 
+                            percentage >= 50 ? 'text-amber-600' : 
+                            'text-red-600'
+                          }`}>
+                            {matchCount}/{totalCount} ({percentage}%)
+                          </p>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full ${
+                              percentage >= 80 ? 'bg-green-500' : 
+                              percentage >= 50 ? 'bg-amber-500' : 
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* Tableau des aménités */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedListing.amenities && selectedListing.amenities.map((amenity: string) => {
+                      const isIncluded = selectedOffer.availableAmenities?.includes(amenity);
+                      
+                      return (
+                        <div 
+                          key={amenity}
+                          className={`flex items-center gap-2 p-2 rounded ${isIncluded 
+                            ? 'bg-green-50 border border-green-100' 
+                            : 'bg-red-50 border border-red-100'
+                          }`}
+                        >
+                          <div className={`rounded-full p-1 ${isIncluded ? 'bg-green-100' : 'bg-red-100'}`}>
+                            {isIncluded ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium capitalize">{amenity.replace(/_/g, " ")}</p>
+                            <p className={`text-xs ${isIncluded ? 'text-green-600' : 'text-red-600'}`}>
+                              {isIncluded ? "✓ Inclus dans l'offre" : "✗ Non disponible"}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                
+                {/* Afficher les aménités supplémentaires proposées par le propriétaire */}
+                {selectedOffer.availableAmenities && selectedOffer.availableAmenities.some(amenity => !selectedListing.amenities.includes(amenity)) && (
+                  <div className="mt-4">
+                    <h5 className="text-sm font-medium text-gray-700 mb-2">Aménités supplémentaires offertes</h5>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedOffer.availableAmenities
+                        .filter(amenity => !selectedListing.amenities.includes(amenity))
+                        .map((amenity: string) => (
+                          <Badge 
+                            key={amenity} 
+                            className="bg-blue-50 text-blue-700 border border-blue-200 capitalize inline-flex items-center gap-1"
+                          >
+                            <Plus className="h-3 w-3 flex-shrink-0" />
+                            {amenity.replace(/_/g, " ")}
+                          </Badge>
+                        ))
+                      }
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <Separator />
+              
+              {/* Description de l'offre */}
+              <div>
+                <h4 className="font-semibold mb-2">Description de l'offre</h4>
+                <p className="text-gray-700 text-sm">{selectedOffer.description}</p>
+              </div>
+              
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-2">
+                {selectedOffer.status === "pending" && (
+                  <>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      className="text-sm"
+                      onClick={() => {
+                        updateOfferStatusMutation.mutate({ offerId: selectedOffer.id, status: "rejected" });
+                        setDetailsDialogOpen(false);
+                      }}
+                    >
+                      Refuser
+                    </Button>
+                    <Button 
+                      size="sm"
+                      className="text-sm bg-pink-600 hover:bg-pink-700"
+                      onClick={() => {
+                        updateOfferStatusMutation.mutate({ offerId: selectedOffer.id, status: "accepted" });
+                        setDetailsDialogOpen(false);
+                      }}
+                    >
+                      Accepter
+                    </Button>
+                  </>
+                )}
+                <DialogClose asChild>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="text-sm"
+                  >
+                    Fermer
+                  </Button>
+                </DialogClose>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

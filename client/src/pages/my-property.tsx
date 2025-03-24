@@ -15,7 +15,7 @@ import {
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useJsApiLoader, Autocomplete } from "@react-google-maps/api";
+import { useJsApiLoader, Autocomplete, Libraries } from "@react-google-maps/api";
 
 type Property = {
   id: number;
@@ -26,6 +26,9 @@ type Property = {
   amenities: string[];
   coordinates?: { lat: number; lng: number };
 };
+
+// Définir les bibliothèques Google Maps comme constante statique en dehors du composant
+const googleMapsLibraries: Libraries = ["places"];
 
 // Type pour les photos à prévisualiser
 type PreviewPhoto = {
@@ -51,7 +54,7 @@ export default function MyProperty() {
   // Configuration de l'API Google Maps
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
-    libraries: ["places"],
+    libraries: googleMapsLibraries,
   });
 
   // Gestion de la sélection d'adresse via Google Places
@@ -559,7 +562,7 @@ export default function MyProperty() {
                       
                       return (
                         <div key={`existing-${index}`} className="relative group">
-                          <div className="w-full h-48 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+                          <div className="w-full h-96 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
                             <img
                               src={photoUrl}
                               alt={`Photo ${index + 1}`}

@@ -39,7 +39,10 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { useJsApiLoader } from "@react-google-maps/api";
+import { useJsApiLoader, Libraries } from "@react-google-maps/api";
+
+// Définir les bibliothèques Google Maps comme constante statique en dehors du composant
+const googleMapsLibraries: Libraries = ["places"];
 
 // Fonction utilitaire pour calculer la distance entre deux points géographiques (en km)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -136,7 +139,7 @@ export default function SearchLocations() {
   // Configuration de l'API Google Maps
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
-    libraries: ["places"],
+    libraries: googleMapsLibraries,
   });
 
   // Geocoder une adresse et obtenir ses coordonnées
@@ -251,13 +254,15 @@ export default function SearchLocations() {
       
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Succès",
         description: "Votre offre a été envoyée avec succès",
       });
       
+      // Invalider les requêtes pour rafraîchir les données
       queryClient.invalidateQueries({ queryKey: ["propertyOffers", targetRequestId] });
+      queryClient.invalidateQueries({ queryKey: ["landlordOffers"] });
       
       setOfferPrice("");
       setOfferDescription("");
