@@ -7,6 +7,7 @@ import type {
   Message,
   Notification,
 } from "@shared/schema";
+import { Contract, CreateContractData } from "./types";
 import { users, rentalRequests, propertyOffers, messages, notifications, properties } from "@shared/schema";
 import { eq, and, or } from "drizzle-orm";
 import { db } from "./db";
@@ -426,6 +427,180 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedProperty;
+  }
+
+  // Méthodes pour la gestion des contrats
+  
+  // Créer un nouveau contrat
+  async createContract(contractData: CreateContractData): Promise<Contract> {
+    // S'assurer que les dates sont des chaînes ISO
+    const startDate = typeof contractData.startDate === 'string' 
+      ? contractData.startDate 
+      : contractData.startDate.toISOString();
+      
+    const endDate = typeof contractData.endDate === 'string' 
+      ? contractData.endDate 
+      : contractData.endDate.toISOString();
+    
+    // Créer la requête SQL pour insérer un contrat
+    const result = await db.execute(sql`
+      INSERT INTO contracts (
+        offer_id, tenant_id, landlord_id, price, property_id, 
+        start_date, end_date, status, created_at, updated_at
+      ) 
+      VALUES (
+        ${contractData.offerId}, ${contractData.tenantId}, ${contractData.landlordId}, 
+        ${contractData.price}, ${contractData.propertyId}, 
+        ${startDate}, ${endDate}, 'active', NOW(), NOW()
+      )
+      RETURNING *
+    `);
+    
+    // Vérifier si nous avons un résultat
+    if (!Array.isArray(result) || result.length === 0) {
+      throw new Error("Erreur lors de la création du contrat");
+    }
+    
+    const contract = result[0] as unknown as Contract;
+    
+    // Mettre à jour le statut de l'offre à "accepted"
+    await this.updatePropertyOfferStatus(contractData.offerId, "accepted", contractData.tenantId);
+    
+    // Mettre à jour le statut de la demande de location à "completed"
+    // D'abord récupérer l'offre pour obtenir l'ID de la demande associée
+    const [offer] = await db.select().from(propertyOffers).where(eq(propertyOffers.id, contractData.offerId));
+    
+    if (offer && offer.requestId) {
+      await db.update(rentalRequests)
+        .set({ status: 'completed' as any })
+        .where(eq(rentalRequests.id, offer.requestId));
+    }
+    
+    return contract;
+  }
+  
+  // Récupérer tous les contrats d'un utilisateur
+  async getUserContracts(userId: number): Promise<Contract[]> {
+    // Récupérer les contrats où l'utilisateur est soit le locataire, soit le propriétaire
+    const result = await db.execute(sql`
+      SELECT c.*, 
+        p.title as property_title, p.address as property_address, p.photos as property_photos,
+        t.id as tenant_id, t.username as tenant_name, t.email as tenant_email,
+        l.id as landlord_id, l.username as landlord_name, l.email as landlord_email,
+        o.description as offer_description, o.available_amenities as offer_amenities
+      FROM contracts c
+      LEFT JOIN properties p ON c.property_id = p.id
+      LEFT JOIN users t ON c.tenant_id = t.id
+      LEFT JOIN users l ON c.landlord_id = l.id
+      LEFT JOIN property_offers o ON c.offer_id = o.id
+      WHERE c.tenant_id = ${userId} OR c.landlord_id = ${userId}
+      ORDER BY c.created_at DESC
+    `);
+    
+    // Vérifier si nous avons des résultats
+    if (!Array.isArray(result)) {
+      return [];
+    }
+    
+    // Formater les données pour correspondre à la structure attendue
+    return result.map((row: any) => {
+      return {
+        id: row.id,
+        offerId: row.offer_id,
+        tenantId: row.tenant_id,
+        landlordId: row.landlord_id,
+        propertyId: row.property_id,
+        price: row.price,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        status: row.status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        property: {
+          id: row.property_id,
+          title: row.property_title,
+          address: row.property_address,
+          photos: row.property_photos || []
+        },
+        tenant: {
+          id: row.tenant_id,
+          name: row.tenant_name,
+          email: row.tenant_email
+        },
+        landlord: {
+          id: row.landlord_id,
+          name: row.landlord_name,
+          email: row.landlord_email
+        },
+        offer: {
+          id: row.offer_id,
+          price: row.price,
+          description: row.offer_description,
+          availableAmenities: row.offer_amenities || []
+        }
+      } as Contract;
+    });
+  }
+  
+  // Récupérer un contrat spécifique
+  async getContractById(contractId: number, userId: number): Promise<Contract | null> {
+    // Récupérer un contrat spécifique, vérifier que l'utilisateur est autorisé à y accéder
+    const result = await db.execute(sql`
+      SELECT c.*, 
+        p.title as property_title, p.address as property_address, p.photos as property_photos,
+        t.id as tenant_id, t.username as tenant_name, t.email as tenant_email,
+        l.id as landlord_id, l.username as landlord_name, l.email as landlord_email,
+        o.description as offer_description, o.available_amenities as offer_amenities
+      FROM contracts c
+      LEFT JOIN properties p ON c.property_id = p.id
+      LEFT JOIN users t ON c.tenant_id = t.id
+      LEFT JOIN users l ON c.landlord_id = l.id
+      LEFT JOIN property_offers o ON c.offer_id = o.id
+      WHERE c.id = ${contractId} AND (c.tenant_id = ${userId} OR c.landlord_id = ${userId})
+    `);
+    
+    // Vérifier si nous avons un résultat
+    if (!Array.isArray(result) || result.length === 0) {
+      return null;
+    }
+    
+    // Formater les données pour correspondre à la structure attendue
+    const row = result[0] as any;
+    return {
+      id: row.id,
+      offerId: row.offer_id,
+      tenantId: row.tenant_id,
+      landlordId: row.landlord_id,
+      propertyId: row.property_id,
+      price: row.price,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      property: {
+        id: row.property_id,
+        title: row.property_title,
+        address: row.property_address,
+        photos: row.property_photos || []
+      },
+      tenant: {
+        id: row.tenant_id,
+        name: row.tenant_name,
+        email: row.tenant_email
+      },
+      landlord: {
+        id: row.landlord_id,
+        name: row.landlord_name,
+        email: row.landlord_email
+      },
+      offer: {
+        id: row.offer_id,
+        price: row.price,
+        description: row.offer_description,
+        availableAmenities: row.offer_amenities || []
+      }
+    } as Contract;
   }
 }
 

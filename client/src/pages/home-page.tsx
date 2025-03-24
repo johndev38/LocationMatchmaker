@@ -2,7 +2,17 @@ import { useAuth } from '@/hooks/use-auth';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import Header from './header';
-import { ArrowRight, Home, Search, MessageSquare, Star, CheckCircle, ChevronRight } from 'lucide-react';
+import { ArrowRight, Home, Search, MessageSquare, Star, CheckCircle, ChevronRight, Send, Plus, ListChecks, FileText, User } from 'lucide-react';
+
+// Composant pour les éléments de navigation
+const NavigationItem = ({ href, icon, text }: { href: string; icon: React.ReactNode; text: string }) => (
+  <Link to={href} className="flex items-center gap-3 p-3 rounded-lg hover:bg-pink-50 transition-colors">
+    <div className="bg-pink-100 p-2 rounded-full">
+      {icon}
+    </div>
+    <span className="font-medium">{text}</span>
+  </Link>
+);
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -57,6 +67,60 @@ export default function HomePage() {
       </section>
 
       <main className="relative z-10">
+        {/* Navigation rapide - Nouvelle section */}
+        <section className="py-10 container mx-auto px-4 lg:px-0">
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-xl font-bold mb-4">Accès rapide</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {user?.isLandlord ? (
+                <>
+                  <NavigationItem
+                    href="/searchLocations"
+                    icon={<Search className="w-5 h-5 text-pink-500" />}
+                    text="Rechercher des locataires"
+                  />
+                  <NavigationItem
+                    href="/landlord-offers"
+                    icon={<Send className="w-5 h-5 text-pink-500" />}
+                    text="Mes offres"
+                  />
+                  <NavigationItem
+                    href="/my-property"
+                    icon={<Home className="w-5 h-5 text-pink-500" />}
+                    text="Mon logement"
+                  />
+                </>
+              ) : (
+                <>
+                  <NavigationItem
+                    href="/create-request"
+                    icon={<Plus className="w-5 h-5 text-pink-500" />}
+                    text="Créer une demande"
+                  />
+                  <NavigationItem
+                    href="/my-listings"
+                    icon={<ListChecks className="w-5 h-5 text-pink-500" />}
+                    text="Mes recherches"
+                  />
+                </>
+              )}
+              
+              {/* Commun à tous les utilisateurs */}
+              <NavigationItem
+                href="/contracts" 
+                icon={<FileText className="w-5 h-5 text-pink-500" />}
+                text="Mes contrats"
+              />
+              
+              <NavigationItem 
+                href="/profile" 
+                icon={<User className="w-5 h-5 text-pink-500" />}
+                text="Mon profil"
+              />
+            </div>
+          </div>
+        </section>
+        
         {/* Section avantages */}
         <section className="py-20 container mx-auto px-4 lg:px-0">
           <div className="text-center mb-16">

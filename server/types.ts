@@ -1,6 +1,54 @@
 import type { User, InsertUser, RentalRequest, PropertyOffer, Message, Notification } from "@shared/schema";
 import type { Store } from "express-session";
 
+// Interface pour les données de contrat
+export interface Contract {
+  id: number;
+  offerId: number;
+  tenantId: number;
+  landlordId: number;
+  propertyId: number;
+  price: number;
+  startDate: string;
+  endDate: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  property?: {
+    id: number;
+    title: string;
+    address: string;
+    photos?: string[];
+  };
+  tenant?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  landlord?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  offer?: {
+    id: number;
+    price: number;
+    description: string;
+    availableAmenities?: string[];
+  };
+}
+
+// Interface pour les données d'entrée d'un contrat
+export interface CreateContractData {
+  offerId: number;
+  tenantId: number;
+  landlordId: number;
+  price: number;
+  propertyId: number;
+  startDate: string | Date;
+  endDate: string | Date;
+}
+
 export interface IStorage {
   sessionStore: Store;
   getUser(id: number): Promise<User | undefined>;
@@ -26,4 +74,9 @@ export interface IStorage {
   updatePropertyOfferStatus(offerId: number, status: string, landlordId: number): Promise<PropertyOffer>;
   getLandlordOffers(landlordId: number): Promise<PropertyOffer[]>;
   createPropertyOfferWithNotification(landlordId: number, offer: Omit<PropertyOffer, "id" | "landlordId" | "status">): Promise<PropertyOffer>;
+  
+  // Méthodes pour la gestion des contrats
+  createContract(contractData: CreateContractData): Promise<Contract>;
+  getUserContracts(userId: number): Promise<Contract[]>;
+  getContractById(contractId: number, userId: number): Promise<Contract | null>;
 }

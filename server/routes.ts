@@ -9,6 +9,7 @@ import { db } from "./db";
 import { upload } from "./upload";
 import path from 'path';
 import fs from 'fs';
+import { createContract, getUserContracts, getContractById } from "./src/controllers/contractController";
 
 const router = express.Router();
 
@@ -392,6 +393,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Erreur lors de l'upload de la photo:", error);
       res.status(500).json({ error: "Erreur lors de l'upload de la photo" });
+    }
+  });
+
+  // Routes pour la gestion des contrats
+  
+  // Créer un nouveau contrat
+  app.post("/api/contracts", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
+    try {
+      return await createContract(req, res);
+    } catch (error) {
+      console.error("Erreur lors de la création du contrat:", error);
+      return res.status(500).json({ error: "Erreur lors de la création du contrat" });
+    }
+  });
+  
+  // Récupérer tous les contrats de l'utilisateur
+  app.get("/api/contracts", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
+    try {
+      return await getUserContracts(req, res);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des contrats:", error);
+      return res.status(500).json({ error: "Erreur lors de la récupération des contrats" });
+    }
+  });
+  
+  // Récupérer un contrat spécifique
+  app.get("/api/contracts/:contractId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
+    try {
+      return await getContractById(req, res);
+    } catch (error) {
+      console.error("Erreur lors de la récupération du contrat:", error);
+      return res.status(500).json({ error: "Erreur lors de la récupération du contrat" });
     }
   });
 
