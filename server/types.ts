@@ -1,4 +1,4 @@
-import type { User, InsertUser, RentalRequest, PropertyOffer, Message, Notification } from "@shared/schema";
+import type { User, InsertUser, RentalRequest, PropertyOffer, Message, Notification, Reservation } from "@shared/schema";
 import type { Store } from "express-session";
 
 // Interface pour les données de contrat
@@ -79,4 +79,21 @@ export interface IStorage {
   createContract(contractData: CreateContractData): Promise<Contract>;
   getUserContracts(userId: number): Promise<Contract[]>;
   getContractById(contractId: number, userId: number): Promise<Contract | null>;
+  
+  // Méthodes pour les réservations
+  createReservation(reservationData: CreateReservationData): Promise<Reservation>;
+  getUserReservations(userId: number): Promise<Reservation[]>;
+  getReservationById(reservationId: number, userId: number): Promise<Reservation | null>;
+  updateReservationStatus(reservationId: number, status: string, userId: number): Promise<Reservation>;
+  updateReservationPaymentStatus(reservationId: number, paymentStatus: string, userId: number): Promise<Reservation>;
+}
+
+export interface CreateReservationData {
+  propertyId: number;
+  tenantId: number;
+  landlordId: number;
+  startDate: string;
+  endDate: string;
+  totalPrice: number;
+  specialRequests?: string;
 }

@@ -6,9 +6,10 @@ import type {
   PropertyOffer,
   Message,
   Notification,
+  Reservation,
 } from "@shared/schema";
-import { Contract, CreateContractData } from "./types";
-import { users, rentalRequests, propertyOffers, messages, notifications, properties } from "@shared/schema";
+import { Contract, CreateContractData, CreateReservationData } from "./types";
+import { users, rentalRequests, propertyOffers, messages, notifications, properties, reservations, contracts } from "@shared/schema";
 import { eq, and, or } from "drizzle-orm";
 import { db } from "./db";
 import session from "express-session";
@@ -101,6 +102,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPropertyOffers(requestId: number): Promise<any[]> {
+    if (isNaN(requestId) || !Number.isInteger(requestId)) {
+      console.error(`getPropertyOffers appelé avec un requestId invalide: ${requestId}`);
+      throw new Error(`ID de demande invalide: ${requestId}`);
+    }
+    console.log("Récupération des offres pour la demande:", requestId);
     // Récupérer les offres pour cette demande
     const offers = await db
       .select()
@@ -601,6 +607,256 @@ export class DatabaseStorage implements IStorage {
         availableAmenities: row.offer_amenities || []
       }
     } as Contract;
+  }
+
+  // Méthodes pour les réservations
+  async createReservation(reservationData: CreateReservationData): Promise<Reservation> {
+    const [newReservation] = await db
+      .insert(reservations)
+      .values({
+        propertyId: reservationData.propertyId,
+        tenantId: reservationData.tenantId,
+        landlordId: reservationData.landlordId,
+        startDate: new Date(reservationData.startDate),
+        endDate: new Date(reservationData.endDate),
+        totalPrice: reservationData.totalPrice,
+        status: "pending",
+        paymentStatus: "unpaid",
+        specialRequests: reservationData.specialRequests,
+      })
+      .returning();
+
+    // Créer une notification pour le propriétaire
+    await this.createNotification(
+      reservationData.landlordId,
+      "reservation_requested",
+      `Une nouvelle demande de réservation a été effectuée pour votre propriété.`,
+      newReservation.id
+    );
+
+    return newReservation;
+  }
+
+  async getUserReservations(userId: number): Promise<Reservation[]> {
+    // Récupérer les réservations où l'utilisateur est soit le locataire, soit le propriétaire
+    const userReservations = await db
+      .select()
+      .from(reservations)
+      .where(
+        or(
+          eq(reservations.tenantId, userId),
+          eq(reservations.landlordId, userId)
+        )
+      );
+
+    // Pour chaque réservation, récupérer les informations de la propriété et des utilisateurs
+    const detailedReservations = await Promise.all(
+      userReservations.map(async (reservation) => {
+        // Récupérer les détails de la propriété
+        const [property] = await db
+          .select()
+          .from(properties)
+          .where(eq(properties.id, reservation.propertyId));
+
+        // Récupérer les informations du locataire
+        const [tenant] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, reservation.tenantId));
+
+        // Récupérer les informations du propriétaire
+        const [landlord] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, reservation.landlordId));
+
+        // Retourner la réservation avec les détails supplémentaires
+        return {
+          ...reservation,
+          property: property ? {
+            id: property.id,
+            title: property.title,
+            address: property.address,
+            photos: property.photos,
+          } : null,
+          tenant: tenant ? {
+            id: tenant.id,
+            name: tenant.username,
+            email: tenant.email,
+          } : null,
+          landlord: landlord ? {
+            id: landlord.id,
+            name: landlord.username,
+            email: landlord.email,
+          } : null,
+        };
+      })
+    );
+
+    return detailedReservations;
+  }
+
+  async getReservationById(reservationId: number, userId: number): Promise<Reservation | null> {
+    // Récupérer la réservation
+    const [reservation] = await db
+      .select()
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.id, reservationId),
+          or(
+            eq(reservations.tenantId, userId),
+            eq(reservations.landlordId, userId)
+          )
+        )
+      );
+
+    if (!reservation) {
+      return null;
+    }
+
+    // Récupérer les détails de la propriété
+    const [property] = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.id, reservation.propertyId));
+
+    // Récupérer les informations du locataire
+    const [tenant] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, reservation.tenantId));
+
+    // Récupérer les informations du propriétaire
+    const [landlord] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, reservation.landlordId));
+
+    // Retourner la réservation avec les détails supplémentaires
+    return {
+      ...reservation,
+      property: property ? {
+        id: property.id,
+        title: property.title,
+        address: property.address,
+        photos: property.photos,
+      } : null,
+      tenant: tenant ? {
+        id: tenant.id,
+        name: tenant.username,
+        email: tenant.email,
+      } : null,
+      landlord: landlord ? {
+        id: landlord.id,
+        name: landlord.username,
+        email: landlord.email,
+      } : null,
+    };
+  }
+
+  async updateReservationStatus(reservationId: number, status: string, userId: number): Promise<Reservation> {
+    // Vérifier que la réservation existe et appartient au propriétaire
+    const [existingReservation] = await db
+      .select()
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.id, reservationId),
+          eq(reservations.landlordId, userId)
+        )
+      );
+
+    if (!existingReservation) {
+      throw new Error("Réservation non trouvée ou vous n'êtes pas autorisé à la modifier");
+    }
+
+    // Mettre à jour le statut
+    const [updatedReservation] = await db
+      .update(reservations)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(reservations.id, reservationId))
+      .returning();
+
+    // Créer une notification pour le locataire
+    let notificationMessage = "";
+    
+    if (status === "confirmed") {
+      notificationMessage = "Votre réservation a été confirmée par le propriétaire.";
+    } else if (status === "cancelled") {
+      notificationMessage = "Votre réservation a été annulée par le propriétaire.";
+    } else if (status === "completed") {
+      notificationMessage = "Votre séjour est terminé. Nous espérons que vous avez passé un agréable moment.";
+    }
+    
+    if (notificationMessage) {
+      await this.createNotification(
+        existingReservation.tenantId,
+        `reservation_${status}`,
+        notificationMessage,
+        reservationId
+      );
+    }
+
+    return updatedReservation;
+  }
+
+  async updateReservationPaymentStatus(reservationId: number, paymentStatus: string, userId: number): Promise<Reservation> {
+    // Vérifier que la réservation existe
+    const [existingReservation] = await db
+      .select()
+      .from(reservations)
+      .where(
+        and(
+          eq(reservations.id, reservationId),
+          or(
+            eq(reservations.tenantId, userId),
+            eq(reservations.landlordId, userId)
+          )
+        )
+      );
+
+    if (!existingReservation) {
+      throw new Error("Réservation non trouvée ou vous n'êtes pas autorisé à la modifier");
+    }
+
+    // Seul le locataire peut mettre à jour le statut de paiement
+    if (existingReservation.tenantId !== userId) {
+      throw new Error("Seul le locataire peut mettre à jour le statut de paiement");
+    }
+
+    // Mettre à jour le statut de paiement
+    const [updatedReservation] = await db
+      .update(reservations)
+      .set({
+        paymentStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(reservations.id, reservationId))
+      .returning();
+
+    // Créer une notification pour le propriétaire
+    let notificationMessage = "";
+    
+    if (paymentStatus === "paid") {
+      notificationMessage = "Le paiement pour votre réservation a été effectué.";
+    } else if (paymentStatus === "partially_paid") {
+      notificationMessage = "Un paiement partiel a été effectué pour votre réservation.";
+    }
+    
+    if (notificationMessage) {
+      await this.createNotification(
+        existingReservation.landlordId,
+        `reservation_payment_${paymentStatus}`,
+        notificationMessage,
+        reservationId
+      );
+    }
+
+    return updatedReservation;
   }
 }
 

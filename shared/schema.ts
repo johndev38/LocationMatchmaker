@@ -58,6 +58,37 @@ export const properties = pgTable("properties", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Définition de la table des contrats
+export const contracts = pgTable("contracts", {
+  id: serial("id").primaryKey(),
+  offerId: integer("offer_id").notNull(),
+  tenantId: integer("tenant_id").notNull(),
+  landlordId: integer("landlord_id").notNull(),
+  propertyId: integer("property_id").notNull(),
+  price: integer("price").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Nouvelle table pour les réservations
+export const reservations = pgTable("reservations", {
+  id: serial("id").primaryKey(),
+  propertyId: integer("property_id").notNull(),
+  tenantId: integer("tenant_id").notNull(),
+  landlordId: integer("landlord_id").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  totalPrice: integer("total_price").notNull(),
+  status: text("status").notNull().default("pending"), // pending, confirmed, cancelled, completed
+  paymentStatus: text("payment_status").notNull().default("unpaid"), // unpaid, partially_paid, paid
+  specialRequests: text("special_requests"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
   senderId: integer("sender_id").notNull(),
@@ -69,9 +100,9 @@ export const messages = pgTable("messages", {
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
-  type: text("type").notNull(), // 'offer_received', 'offer_accepted', 'offer_rejected', etc.
+  type: text("type").notNull(), // 'offer_received', 'offer_accepted', 'offer_rejected', 'reservation_requested', 'reservation_confirmed', etc.
   content: text("content").notNull(),
-  relatedId: integer("related_id"), // ID de l'offre ou de la demande concernée
+  relatedId: integer("related_id"), // ID de l'offre, la demande ou la réservation concernée
   isRead: boolean("is_read").notNull().default(false),
   timestamp: text("timestamp").notNull(),
 });
@@ -121,6 +152,19 @@ export const amenities = [
   "proche_ski",
 ] as const;
 
+export const reservationStatuses = [
+  "pending",
+  "confirmed",
+  "cancelled",
+  "completed",
+] as const;
+
+export const paymentStatuses = [
+  "unpaid",
+  "partially_paid",
+  "paid",
+] as const;
+
 export const insertRentalRequestSchema = createInsertSchema(rentalRequests)
   .omit({
     id: true,
@@ -161,6 +205,44 @@ export const updatePropertySchema = createInsertSchema(properties).omit({
   updatedAt: true,
 });
 
+export const insertReservationSchema = createInsertSchema(reservations)
+  .omit({
+    id: true,
+    status: true,
+    paymentStatus: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    startDate: z.date(),
+    endDate: z.date().refine(date => date >= new Date(), "La date de fin doit être dans le futur"),
+    specialRequests: z.string().optional(),
+  });
+
+export const updateReservationSchema = createInsertSchema(reservations)
+  .omit({
+    id: true,
+    propertyId: true,
+    tenantId: true,
+    landlordId: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    status: z.enum(reservationStatuses),
+    paymentStatus: z.enum(paymentStatuses),
+    startDate: z.date().optional(),
+    endDate: z.date().optional().refine(
+      (date) => {
+        if (!date) return true;
+        if (date >= new Date()) return true;
+        return false;
+      }, 
+      "La date de fin doit être dans le futur"
+    ),
+    specialRequests: z.string().optional(),
+  });
+
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   timestamp: true,
@@ -175,5 +257,10 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type RentalRequest = typeof rentalRequests.$inferSelect;
 export type PropertyOffer = typeof propertyOffers.$inferSelect;
+export type Property = typeof properties.$inferSelect;
+export type Contract = typeof contracts.$inferSelect;
+export type Reservation = typeof reservations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type InsertReservation = z.infer<typeof insertReservationSchema>;
+export type UpdateReservation = z.infer<typeof updateReservationSchema>;
