@@ -442,6 +442,21 @@ export class DatabaseStorage implements IStorage {
   // Créer un nouveau contrat
   async createContract(contractData: CreateContractData): Promise<Contract> {
     try {
+      // Vérifier s'il existe déjà un contrat actif pour cette propriété
+      const existingContracts = await db
+        .select()
+        .from(contracts)
+        .where(
+          and(
+            eq(contracts.propertyId, contractData.propertyId),
+            eq(contracts.status, 'active')
+          )
+        );
+      
+      if (existingContracts.length > 0) {
+        throw new Error("Cette propriété est déjà sous contrat. Impossible d'en créer un nouveau.");
+      }
+      
       // S'assurer que les dates sont des chaînes ISO
       const startDate = typeof contractData.startDate === 'string' 
         ? contractData.startDate 
@@ -540,6 +555,11 @@ export class DatabaseStorage implements IStorage {
             .from(users)
             .where(eq(users.id, contract.landlordId));
           
+          // S'assurer que les informations du propriétaire sont toujours disponibles
+          if (!landlord) {
+            console.warn(`Propriétaire (ID: ${contract.landlordId}) non trouvé dans la base de données.`);
+          }
+          
           // Récupérer les détails de l'offre
           const [offer] = await db
             .select()
@@ -559,7 +579,12 @@ export class DatabaseStorage implements IStorage {
               title: property.title,
               address: property.address,
               photos: property.photos || []
-            } : null,
+            } : {
+              id: contract.propertyId,
+              title: "Propriété inconnue",
+              address: "Adresse non disponible",
+              photos: []
+            },
             tenant: tenant ? {
               id: tenant.id,
               name: tenant.username,

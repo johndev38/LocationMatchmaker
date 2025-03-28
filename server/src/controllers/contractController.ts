@@ -81,6 +81,15 @@ export const createContract = async (req: Request, res: Response) => {
     return res.status(201).json(contract);
   } catch (error) {
     console.error("Erreur lors de la création du contrat:", error);
+    
+    // Vérifier si c'est une erreur concernant un contrat existant
+    if (error instanceof Error && error.message.includes("déjà sous contrat")) {
+      return res.status(409).json({ 
+        message: error.message,
+        error: "PROPERTY_ALREADY_CONTRACTED" 
+      });
+    }
+    
     return res.status(500).json({ message: "Erreur serveur lors de la création du contrat" });
   }
 };

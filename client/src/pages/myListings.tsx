@@ -242,18 +242,53 @@ export default function MyListings() {
           // Journaliser les données du contrat avant envoi
           console.log("Données du contrat à créer:", contractData);
           
-          const contractResponse = await apiRequest("POST", "/api/contracts", contractData);
-
-          if (!contractResponse.ok) {
-            // L'offre a été acceptée mais la création du contrat a échoué
-            // On pourrait envisager de revenir en arrière ici
-            console.error("L'offre a été acceptée mais la création du contrat a échoué");
-            const errorData = await contractResponse.json().catch(() => null);
-            throw new Error(errorData?.message || "Erreur lors de la création du contrat");
+          try {
+            const contractResponse = await apiRequest("POST", "/api/contracts", contractData);
+            
+            if (!contractResponse.ok) {
+              const errorData = await contractResponse.json();
+              
+              // Gestion spécifique des erreurs connues
+              if (errorData.error === "PROPERTY_ALREADY_CONTRACTED") {
+                toast({
+                  title: "Contrat impossible",
+                  description: "Cette propriété est déjà sous contrat. Un seul contrat actif est autorisé par propriété.",
+                  variant: "destructive",
+                });
+                return { updatedOffer, contract: null };
+              }
+              
+              // Gestion générique des erreurs
+              toast({
+                title: "Erreur",
+                description: errorData.message || "Impossible de créer le contrat",
+                variant: "destructive",
+              });
+              throw new Error(errorData?.message || "Erreur lors de la création du contrat");
+            }
+            
+            // En cas de succès
+            const contract = await contractResponse.json();
+            toast({
+              title: "Contrat créé",
+              description: "Le contrat a été créé avec succès!",
+            });
+            
+            // Rediriger vers la page des contrats
+            setTimeout(() => {
+              window.location.href = "/contracts";
+            }, 1000);
+            
+            return { updatedOffer, contract };
+          } catch (error) {
+            console.error("Erreur lors de la création du contrat:", error);
+            toast({
+              title: "Erreur",
+              description: "Une erreur inattendue s'est produite",
+              variant: "destructive",
+            });
+            return { updatedOffer, contract: null };
           }
-
-          const contract = await contractResponse.json();
-          return { updatedOffer, contract };
         }
 
         return updatedOffer;

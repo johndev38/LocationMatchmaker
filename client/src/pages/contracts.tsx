@@ -11,8 +11,8 @@ import { Separator } from "@/components/ui/separator";
 interface Contract {
   id: number;
   offerId: number;
-  tenantId: string;
-  landlordId: string;
+  tenantId: number;
+  landlordId: number;
   propertyId: number;
   price: number;
   startDate: string;
@@ -20,12 +20,12 @@ interface Contract {
   status: string;
   createdAt: string;
   tenant: {
-    id: string;
+    id: number;
     name: string;
     email: string;
   };
   landlord: {
-    id: string;
+    id: number;
     name: string;
     email: string;
   };
@@ -93,6 +93,9 @@ export default function ContractsPage() {
             <p className="text-gray-500 mt-1">
               Consultez vos contrats de location actifs et passés
             </p>
+          </div>
+          <div className="bg-amber-50 p-3 rounded-lg text-amber-700 text-sm border border-amber-200 max-w-md">
+            <p>Un seul contrat actif est autorisé par propriété. Pour ajouter un nouveau contrat, veuillez d'abord terminer les contrats existants.</p>
           </div>
         </div>
 
@@ -191,6 +194,13 @@ export default function ContractsPage() {
                               <p className="text-sm text-gray-600">{contract.property?.title || "Propriété"}</p>
                             </div>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <Home className="h-4 w-4 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium">Adresse</p>
+                              <p className="text-sm text-gray-600">{contract.property?.address || "Adresse non disponible"}</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -216,6 +226,13 @@ export default function ContractsPage() {
                             <div>
                               <p className="text-sm font-medium">Rôle</p>
                               <p className="text-sm text-gray-600">{isLandlord ? "Locataire" : "Propriétaire"}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium">Identifiant</p>
+                              <p className="text-sm text-gray-600">{otherParty?.id || "Non disponible"}</p>
                             </div>
                           </div>
                         </div>
