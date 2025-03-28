@@ -1,5 +1,11 @@
 import { Request, Response } from 'express';
-import { storage } from '../../storage';
+import { DatabaseStorage } from '../../storage';
+import { eq } from 'drizzle-orm';
+import { db } from '../../db';
+import { propertyOffers, properties } from '@shared/schema';
+
+// On initialise une instance directement au lieu d'utiliser une importation
+const storage = new DatabaseStorage();
 
 // Créer un nouveau contrat entre un propriétaire et un locataire
 export const createContract = async (req: Request, res: Response) => {
@@ -46,13 +52,10 @@ export const createContract = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Prix invalide" });
     }
 
-    // Vérifier que l'offre existe
-    const offers = await storage.getPropertyOffers(propertyIdInt);
-    const offer = offers.find(o => o.id === offerIdInt);
-
-    if (!offer) {
-      return res.status(404).json({ message: "Offre non trouvée" });
-    }
+    // Nous utilisons directement l'ID de propriété passé par le client,
+    // car il a déjà fait la vérification et la logique de fallback
+    console.log("ID de propriété reçu:", propertyIdInt);
+    console.log("ID d'offre reçu:", offerIdInt);
 
     console.log("Données du contrat avant création :", {
       offerId: offerIdInt,

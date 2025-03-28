@@ -182,62 +182,52 @@ export default function MyListings() {
         const originalOffer = allPropertyOffers.find(o => o.id === offerId);
         console.log("Offre originale:", originalOffer);
         
-        // Essayons toutes les sources possibles pour l'ID de propriété
-        let propertyId = null;
+        // Récupérer l'ID de la propriété correctement
+        let propertyId = updatedOffer.propertyId;
         
-        // 1. D'abord à partir de l'offre mise à jour
-        if (updatedOffer.propertyId) {
-          propertyId = updatedOffer.propertyId;
-        } 
-        // 2. Ensuite à partir du champ property de l'offre mise à jour
-        else if (updatedOffer.property && updatedOffer.property.id) {
+        // Si l'ID n'est pas directement dans l'offre, chercher dans l'objet property
+        if (!propertyId && updatedOffer.property && updatedOffer.property.id) {
           propertyId = updatedOffer.property.id;
+          console.log("ID de propriété trouvé dans property.id:", propertyId);
         }
-        // 3. Puis à partir de l'offre originale
-        else if (originalOffer && originalOffer.propertyId) {
+        
+        // Fallback à l'offre originale si nécessaire
+        if (!propertyId && originalOffer && originalOffer.propertyId) {
           propertyId = originalOffer.propertyId;
-        }
-        // 4. Ensuite à partir du champ property de l'offre originale
-        else if (originalOffer && originalOffer.property && originalOffer.property.id) {
+          console.log("ID de propriété trouvé dans l'offre originale:", propertyId);
+        } else if (!propertyId && originalOffer && originalOffer.property && originalOffer.property.id) {
           propertyId = originalOffer.property.id;
+          console.log("ID de propriété trouvé dans property.id de l'offre originale:", propertyId);
         }
-        // 5. En dernier recours, utiliser un ID de propriété fictif (1)
-        // ATTENTION: Ceci est une solution temporaire et il serait préférable de résoudre le problème à la source
-        else {
+        
+        // Si toujours pas d'ID, utiliser une valeur par défaut avec avertissement
+        if (!propertyId) {
           console.warn("Aucun ID de propriété trouvé - utilisation d'un ID par défaut (1)");
           propertyId = 1;
         }
         
-        console.log("ID de propriété trouvé:", propertyId);
+        // Récupérer l'ID du propriétaire aussi
+        let landlordId = updatedOffer.landlordId;
         
-        // On ne lance pas d'erreur même si l'ID est fictif, car nous voulons permettre à la création du contrat de continuer
-        // if (!propertyId) {
-        //   console.error("Impossible de trouver l'ID de propriété dans l'offre mise à jour");
-        //   throw new Error("ID de propriété manquant dans l'offre");
-        // }
-
-        // Pour récupérer l'ID du propriétaire, on essaie toutes les sources possibles
-        let landlordId = null;
-        if (updatedOffer.landlordId) {
-          landlordId = updatedOffer.landlordId;
-        } else if (updatedOffer.ownerId) {
-          landlordId = updatedOffer.ownerId;
-        } else if (updatedOffer.owner && updatedOffer.owner.id) {
+        if (!landlordId && updatedOffer.owner && updatedOffer.owner.id) {
           landlordId = updatedOffer.owner.id;
-        } else if (originalOffer && originalOffer.landlordId) {
+        } else if (!landlordId && originalOffer && originalOffer.landlordId) {
           landlordId = originalOffer.landlordId;
+        } else if (!landlordId && originalOffer && originalOffer.owner && originalOffer.owner.id) {
+          landlordId = originalOffer.owner.id;
         } else {
           console.warn("Aucun ID de propriétaire trouvé - utilisation d'un ID par défaut (1)");
           landlordId = 1;
         }
         
         console.log("ID du propriétaire trouvé:", landlordId);
+        console.log("ID de la propriété trouvé:", propertyId);
 
         // Si l'offre est acceptée, créer un contrat entre les deux parties
         if (status === "accepted") {
           // Trouver la demande associée à cette offre
           const relatedListing = userListings.find((l: RentalListing) => l.id === originalOffer?.requestId);
-
+          
           // Préparer les données du contrat avec des valeurs par défaut sécurisées
           const contractData = {
             offerId: offerId,

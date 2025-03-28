@@ -119,15 +119,36 @@ export default function ContractsPage() {
               const isLandlord = user?.id === contract.landlordId;
               const otherParty = isLandlord ? contract.tenant : contract.landlord;
               
+              // Si l'une des parties est manquante, afficher un message d'erreur gracieux
+              if (!otherParty) {
+                return (
+                  <Card key={contract.id} className="overflow-hidden border-0 shadow-sm hover:shadow-md transition-all">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-xl font-semibold text-gray-800">
+                        {contract.property?.title || "Propriété"}
+                      </CardTitle>
+                      <CardDescription className="text-red-500">
+                        Certaines informations de ce contrat sont manquantes
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p>Nous ne pouvons pas afficher tous les détails de ce contrat car certaines informations sont manquantes.</p>
+                      <p>Identifiant du contrat: {contract.id}</p>
+                      <p>Prix: {contract.price} €</p>
+                    </CardContent>
+                  </Card>
+                );
+              }
+              
               return (
                 <Card key={contract.id} className="overflow-hidden border-0 shadow-sm hover:shadow-md transition-all">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle className="text-xl font-semibold text-gray-800">
-                          {contract.property.title || "Propriété"}
+                          {contract.property?.title || "Propriété"}
                         </CardTitle>
-                        <p className="text-gray-600 text-sm mt-1">{contract.property.address}</p>
+                        <p className="text-gray-600 text-sm mt-1">{contract.property?.address || "Adresse non disponible"}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-2xl font-bold text-pink-600">{contract.price} €</p>
@@ -167,7 +188,7 @@ export default function ContractsPage() {
                             <Home className="h-4 w-4 text-gray-500" />
                             <div>
                               <p className="text-sm font-medium">Propriété</p>
-                              <p className="text-sm text-gray-600">{contract.property.title || "Propriété"}</p>
+                              <p className="text-sm text-gray-600">{contract.property?.title || "Propriété"}</p>
                             </div>
                           </div>
                         </div>
@@ -180,14 +201,14 @@ export default function ContractsPage() {
                             <User className="h-4 w-4 text-gray-500" />
                             <div>
                               <p className="text-sm font-medium">Nom</p>
-                              <p className="text-sm text-gray-600">{otherParty.name}</p>
+                              <p className="text-sm text-gray-600">{otherParty?.name || "Non disponible"}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Info className="h-4 w-4 text-gray-500" />
                             <div>
                               <p className="text-sm font-medium">Email</p>
-                              <p className="text-sm text-gray-600">{otherParty.email}</p>
+                              <p className="text-sm text-gray-600">{otherParty?.email || "Non disponible"}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -201,7 +222,7 @@ export default function ContractsPage() {
                       </div>
                     </div>
 
-                    {contract.offer.availableAmenities && contract.offer.availableAmenities.length > 0 && (
+                    {contract.offer?.availableAmenities && contract.offer.availableAmenities.length > 0 && (
                       <div className="mb-6">
                         <p className="text-sm text-gray-500 mb-2">Prestations incluses</p>
                         <div className="flex flex-wrap gap-2">
@@ -220,7 +241,7 @@ export default function ContractsPage() {
 
                     <div className="mt-4">
                       <p className="text-sm text-gray-500 mb-2">Description de l'offre</p>
-                      <p className="text-gray-700">{contract.offer.description}</p>
+                      <p className="text-gray-700">{contract.offer?.description || "Aucune description disponible"}</p>
                     </div>
                   </CardContent>
 
