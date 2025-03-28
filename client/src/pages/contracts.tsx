@@ -119,8 +119,18 @@ export default function ContractsPage() {
         ) : (
           <div className="space-y-6">
             {contracts.map((contract: Contract) => {
+              // Ajouter des logs pour le débogage
+              console.log("Contrat:", contract);
+              console.log("ID utilisateur:", user?.id);
+              console.log("ID propriétaire dans le contrat:", contract.landlordId);
+              console.log("Objet propriétaire:", contract.landlord);
+              console.log("Objet locataire:", contract.tenant);
+              
               const isLandlord = user?.id === contract.landlordId;
               const otherParty = isLandlord ? contract.tenant : contract.landlord;
+              
+              console.log("Est propriétaire:", isLandlord);
+              console.log("Autre partie:", otherParty);
               
               // Si l'une des parties est manquante, afficher un message d'erreur gracieux
               if (!otherParty) {

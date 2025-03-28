@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { DatabaseStorage } from '../../storage';
 import { eq } from 'drizzle-orm';
 import { db } from '../../db';
-import { propertyOffers, properties } from '@shared/schema';
+import { propertyOffers, properties, users } from '@shared/schema';
 
 // On initialise une instance directement au lieu d'utiliser une importation
 const storage = new DatabaseStorage();
@@ -57,7 +57,7 @@ export const createContract = async (req: Request, res: Response) => {
     console.log("ID de propriété reçu:", propertyIdInt);
     console.log("ID d'offre reçu:", offerIdInt);
 
-    console.log("Données du contrat avant création :", {
+    console.log("Avant création du contrat - Données finales:", {
       offerId: offerIdInt,
       tenantId: tenantIdInt,
       landlordId: landlordIdInt,
@@ -66,6 +66,18 @@ export const createContract = async (req: Request, res: Response) => {
       startDate,
       endDate
     });
+
+    // Vérifions si l'ID du propriétaire existe bien dans la table des utilisateurs
+    const [landlordExists] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, landlordIdInt));
+    
+    if (!landlordExists) {
+      console.warn(`Avertissement: L'ID du propriétaire (${landlordIdInt}) n'existe pas dans la table des utilisateurs!`);
+    } else {
+      console.log(`Propriétaire vérifié: ${landlordExists.username} (ID: ${landlordExists.id})`);
+    }
 
     // Créer le contrat
     const contract = await storage.createContract({

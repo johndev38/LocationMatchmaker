@@ -10,6 +10,7 @@ import { upload } from "./upload";
 import path from 'path';
 import fs from 'fs';
 import { createContract, getUserContracts, getContractById } from "./src/controllers/contractController";
+import { Router } from "express";
 
 const router = express.Router();
 
@@ -439,6 +440,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ error: "Erreur lors de la récupération du contrat" });
     }
   });
+
+  // Routes pour les réservations (définies directement ici)
+  const reservationsRouter = express.Router();
+
+  // GET: Récupérer toutes les réservations de l'utilisateur
+  reservationsRouter.get("/", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const userId = req.user!.id;
+      
+      const userReservations = await db.query.reservations.findMany({
+        where: (reservations) => {
+          return and(
+            eq(reservations.tenantId, userId).or(eq(reservations.landlordId, userId))
+          );
+        },
+        with: {
+          property: true,
+          tenant: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          landlord: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+      
+      console.log(`Récupération de ${userReservations.length} réservations pour l'utilisateur ${userId}`);
+      
+      res.json(userReservations);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des réservations:", error);
+      res.status(500).json({ error: "Erreur lors de la récupération des réservations" });
+    }
+  });
+
+  // Enregistrer les routes des réservations
+  app.use('/api/reservations', reservationsRouter);
 
   const httpServer = createServer(app);
   return httpServer;

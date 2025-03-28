@@ -15,6 +15,7 @@ import LandlordOffers from "./pages/landlord-offers";
 import SearchLocations from "./pages/search-locations";
 import MyProperty from "./pages/my-property";
 import ContractsPage from "./pages/contracts";
+import ReservationsPage from "./pages/reservations";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
               <Route path="/landlord-offers" element={<LandlordOffers />} />
               <Route path="/my-property" element={<MyProperty />} />
               <Route path="/contracts" element={<ContractsPage />} />
+              <Route path="/reservations" element={<ReservationsPage />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

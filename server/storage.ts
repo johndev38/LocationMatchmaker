@@ -549,15 +549,28 @@ export class DatabaseStorage implements IStorage {
             .from(users)
             .where(eq(users.id, contract.tenantId));
           
+          if (!tenant) {
+            console.warn(`Locataire (ID: ${contract.tenantId}) non trouvé dans la base de données.`);
+          } else {
+            console.log(`Locataire trouvé: ${tenant.username} (ID: ${tenant.id})`);
+          }
+          
           // Récupérer les informations du propriétaire
+          console.log(`Tentative de récupération du propriétaire avec ID: ${contract.landlordId}`);
+          
+          // Vérifions tous les utilisateurs pour déboguer
+          const allUsers = await db.select().from(users);
+          console.log("Tous les utilisateurs disponibles:", allUsers.map(u => ({ id: u.id, username: u.username })));
+          
           const [landlord] = await db
             .select()
             .from(users)
             .where(eq(users.id, contract.landlordId));
           
-          // S'assurer que les informations du propriétaire sont toujours disponibles
           if (!landlord) {
             console.warn(`Propriétaire (ID: ${contract.landlordId}) non trouvé dans la base de données.`);
+          } else {
+            console.log(`Propriétaire trouvé: ${landlord.username} (ID: ${landlord.id})`);
           }
           
           // Récupérer les détails de l'offre
@@ -725,28 +738,236 @@ export class DatabaseStorage implements IStorage {
 
   // Méthodes pour les réservations
   async createReservation(reservationData: CreateReservationData): Promise<Reservation> {
-    // Implémenter cette méthode selon les besoins
-    throw new Error("Méthode createReservation non encore implémentée");
+    try {
+      // Vérifier que le landlord existe
+      const landlord = await db.query.users.findFirst({
+        where: eq(users.id, reservationData.landlordId),
+      });
+
+      if (!landlord) {
+        throw new Error(`Propriétaire (ID: ${reservationData.landlordId}) non trouvé dans la base de données`);
+      }
+
+      // Vérifier que la propriété existe
+      const property = await db.query.properties.findFirst({
+        where: eq(properties.id, reservationData.propertyId),
+      });
+
+      if (!property) {
+        throw new Error(`Propriété (ID: ${reservationData.propertyId}) non trouvée dans la base de données`);
+      }
+
+      const [newReservation] = await db.insert(reservations).values({
+        propertyId: reservationData.propertyId,
+        tenantId: reservationData.tenantId,
+        landlordId: reservationData.landlordId,
+        startDate: new Date(reservationData.startDate),
+        endDate: new Date(reservationData.endDate),
+        totalPrice: reservationData.totalPrice,
+        status: "pending",
+        paymentStatus: "unpaid",
+        specialRequests: reservationData.specialRequests || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      // Créer une notification pour le propriétaire
+      await this.createNotification({
+        userId: reservationData.landlordId,
+        type: "reservation_requested",
+        content: `Une nouvelle demande de réservation a été reçue`,
+        relatedId: newReservation.id,
+        timestamp: new Date().toISOString(),
+      });
+
+      const reservation = await this.getReservationById(newReservation.id, reservationData.tenantId);
+      if (!reservation) {
+        throw new Error(`Impossible de récupérer la réservation créée avec l'ID ${newReservation.id}`);
+      }
+      return reservation;
+    } catch (error) {
+      console.error("Erreur lors de la création de la réservation:", error);
+      throw error;
+    }
   }
 
   async getUserReservations(userId: number): Promise<Reservation[]> {
-    // Implémenter cette méthode selon les besoins
-    throw new Error("Méthode getUserReservations non encore implémentée");
+    try {
+      const userReservations = await db.query.reservations.findMany({
+        where: (reservations) => {
+          return or(
+            eq(reservations.tenantId, userId),
+            eq(reservations.landlordId, userId)
+          );
+        },
+        with: {
+          property: true,
+          tenant: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          landlord: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: (reservations) => desc(reservations.createdAt),
+      });
+
+      return userReservations;
+    } catch (error) {
+      console.error("Erreur lors de la récupération des réservations:", error);
+      throw error;
+    }
   }
 
   async getReservationById(reservationId: number, userId: number): Promise<Reservation | null> {
-    // Implémenter cette méthode selon les besoins
-    throw new Error("Méthode getReservationById non encore implémentée");
+    try {
+      const reservation = await db.query.reservations.findFirst({
+        where: (reservations) => {
+          return and(
+            eq(reservations.id, reservationId),
+            or(
+              eq(reservations.tenantId, userId),
+              eq(reservations.landlordId, userId)
+            )
+          );
+        },
+        with: {
+          property: true,
+          tenant: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          landlord: {
+            columns: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      return reservation;
+    } catch (error) {
+      console.error("Erreur lors de la récupération de la réservation:", error);
+      throw error;
+    }
   }
 
   async updateReservationStatus(reservationId: number, status: string, userId: number): Promise<Reservation> {
-    // Implémenter cette méthode selon les besoins
-    throw new Error("Méthode updateReservationStatus non encore implémentée");
+    try {
+      // Vérifier que la réservation existe et que l'utilisateur est le propriétaire
+      const reservation = await db.query.reservations.findFirst({
+        where: (reservations) => {
+          return and(
+            eq(reservations.id, reservationId),
+            eq(reservations.landlordId, userId)
+          );
+        },
+      });
+
+      if (!reservation) {
+        throw new Error("Réservation non trouvée ou vous n'êtes pas autorisé à la modifier");
+      }
+
+      // Mettre à jour le statut
+      const [updatedReservation] = await db
+        .update(reservations)
+        .set({ 
+          status,
+          updatedAt: new Date(),
+        })
+        .where(eq(reservations.id, reservationId))
+        .returning();
+
+      // Créer une notification pour le locataire
+      await this.createNotification({
+        userId: reservation.tenantId,
+        type: `reservation_${status}`,
+        content: `Votre réservation a été ${status === "confirmed" ? "confirmée" : status === "cancelled" ? "annulée" : "mise à jour"}`,
+        relatedId: reservationId,
+        timestamp: new Date().toISOString(),
+      });
+
+      const result = await this.getReservationById(reservationId, userId);
+      if (!result) {
+        throw new Error(`Impossible de récupérer la réservation mise à jour avec l'ID ${reservationId}`);
+      }
+      return result;
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du statut de la réservation:", error);
+      throw error;
+    }
   }
 
   async updateReservationPaymentStatus(reservationId: number, paymentStatus: string, userId: number): Promise<Reservation> {
-    // Implémenter cette méthode selon les besoins
-    throw new Error("Méthode updateReservationPaymentStatus non encore implémentée");
+    try {
+      // Vérifier que la réservation existe et que l'utilisateur est le locataire
+      const reservation = await db.query.reservations.findFirst({
+        where: (reservations) => {
+          return and(
+            eq(reservations.id, reservationId),
+            eq(reservations.tenantId, userId)
+          );
+        },
+      });
+
+      if (!reservation) {
+        throw new Error("Réservation non trouvée ou vous n'êtes pas autorisé à la modifier");
+      }
+
+      // Mettre à jour le statut
+      const [updatedReservation] = await db
+        .update(reservations)
+        .set({ 
+          paymentStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(reservations.id, reservationId))
+        .returning();
+
+      // Créer une notification pour le propriétaire
+      await this.createNotification({
+        userId: reservation.landlordId,
+        type: `payment_${paymentStatus}`,
+        content: `Le paiement de la réservation est maintenant ${paymentStatus === "paid" ? "payé" : paymentStatus === "partially_paid" ? "partiellement payé" : "non payé"}`,
+        relatedId: reservationId,
+        timestamp: new Date().toISOString(),
+      });
+
+      const result = await this.getReservationById(reservationId, userId);
+      if (!result) {
+        throw new Error(`Impossible de récupérer la réservation mise à jour avec l'ID ${reservationId}`);
+      }
+      return result;
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du statut de paiement de la réservation:", error);
+      throw error;
+    }
+  }
+
+  async getUserById(userId: number): Promise<User | null> {
+    try {
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, userId),
+      });
+
+      return user;
+    } catch (error) {
+      console.error("Erreur lors de la récupération de l'utilisateur:", error);
+      return null;
+    }
   }
 }
 

@@ -27,6 +27,10 @@ export default function Header() {
       href: "/contracts",
     },
     {
+      title: "Mes réservations",
+      href: "/reservations",
+    },
+    {
       title: "Déconnexion",
       href: "#",
       onClick: () => logoutMutation.mutate(),
@@ -74,6 +78,12 @@ export default function Header() {
           )}
           {user ? (
             <>
+              <Link to="/contracts" className="transition hover:text-pink-500">
+                <Button variant="ghost">Mes contrats</Button>
+              </Link>
+              <Link to="/reservations" className="transition hover:text-pink-500">
+                <Button variant="ghost">Mes réservations</Button>
+              </Link>
               <NotificationCenter />
               <Popover>
                 <PopoverTrigger asChild>
