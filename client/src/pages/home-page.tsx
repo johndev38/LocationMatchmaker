@@ -107,9 +107,9 @@ export default function HomePage() {
               
               {/* Commun à tous les utilisateurs */}
               <NavigationItem
-                href="/contracts" 
+                href="/reservations" 
                 icon={<FileText className="w-5 h-5 text-pink-500" />}
-                text="Mes contrats"
+                text="Mes réservations"
               />
               
               <NavigationItem 

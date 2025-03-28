@@ -4,7 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertRentalRequestSchema, insertPropertyOfferSchema, insertMessageSchema, rentalRequests } from "@shared/schema";
 import express from 'express';
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { db } from "./db";
 import { upload } from "./upload";
 import path from 'path';
@@ -397,47 +397,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Routes pour la gestion des contrats
+  // Routes pour la gestion des contrats -> redirigées vers les routes des réservations
   
-  // Créer un nouveau contrat
+  // Créer un nouveau contrat -> rediriger vers la création d'une réservation
   app.post("/api/contracts", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
     
     try {
-      return await createContract(req, res);
+      // Ajouter totalPrice au corps de la requête s'il n'est pas présent
+      if (!req.body.totalPrice && req.body.price) {
+        req.body.totalPrice = req.body.price;
+      } else if (!req.body.totalPrice) {
+        req.body.totalPrice = 0;
+      }
+      
+      // Créer une réservation au lieu d'un contrat
+      const reservation = await storage.createReservation(req.body);
+      return res.status(201).json(reservation);
     } catch (error) {
-      console.error("Erreur lors de la création du contrat:", error);
-      return res.status(500).json({ error: "Erreur lors de la création du contrat" });
+      console.error("Erreur lors de la création de la réservation:", error);
+      return res.status(500).json({ error: "Erreur lors de la création de la réservation" });
     }
   });
   
-  // Récupérer tous les contrats de l'utilisateur
+  // Récupérer tous les contrats de l'utilisateur -> rediriger vers la liste des réservations
   app.get("/api/contracts", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
     
     try {
-      return await getUserContracts(req, res);
+      const userId = req.user!.id;
+      const reservations = await storage.getUserReservations(userId);
+      return res.json(reservations);
     } catch (error) {
-      console.error("Erreur lors de la récupération des contrats:", error);
-      return res.status(500).json({ error: "Erreur lors de la récupération des contrats" });
+      console.error("Erreur lors de la récupération des réservations:", error);
+      return res.status(500).json({ error: "Erreur lors de la récupération des réservations" });
     }
   });
   
-  // Récupérer un contrat spécifique
+  // Récupérer un contrat spécifique -> rediriger vers une réservation spécifique
   app.get("/api/contracts/:contractId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
     
     try {
-      return await getContractById(req, res);
+      const contractId = parseInt(req.params.contractId);
+      const userId = req.user!.id;
+      
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "ID de réservation invalide" });
+      }
+      
+      const reservation = await storage.getReservationById(contractId, userId);
+      if (!reservation) {
+        return res.status(404).json({ error: "Réservation non trouvée" });
+      }
+      
+      return res.json(reservation);
     } catch (error) {
-      console.error("Erreur lors de la récupération du contrat:", error);
-      return res.status(500).json({ error: "Erreur lors de la récupération du contrat" });
+      console.error("Erreur lors de la récupération de la réservation:", error);
+      return res.status(500).json({ error: "Erreur lors de la récupération de la réservation" });
     }
   });
 
@@ -450,30 +473,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       
-      const userReservations = await db.query.reservations.findMany({
-        where: (reservations) => {
-          return and(
-            eq(reservations.tenantId, userId).or(eq(reservations.landlordId, userId))
-          );
-        },
-        with: {
-          property: true,
-          tenant: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          landlord: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
+      // Utiliser la méthode getUserReservations du storage
+      const userReservations = await storage.getUserReservations(userId);
       
       console.log(`Récupération de ${userReservations.length} réservations pour l'utilisateur ${userId}`);
       
@@ -481,6 +482,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Erreur lors de la récupération des réservations:", error);
       res.status(500).json({ error: "Erreur lors de la récupération des réservations" });
+    }
+  });
+
+  // POST: Créer une nouvelle réservation
+  reservationsRouter.post("/", async (req, res) => {
+    console.log("POST /api/reservations - Début de la requête");
+    console.log("Corps de la requête:", req.body);
+    console.log("Utilisateur authentifié:", req.isAuthenticated());
+    
+    if (!req.isAuthenticated()) {
+      console.log("Utilisateur non authentifié, envoi 401");
+      return res.sendStatus(401);
+    }
+    
+    try {
+      console.log("Création d'une nouvelle réservation pour l'utilisateur:", req.user!.id);
+      
+      // Vérifier que les données minimales sont présentes
+      const { propertyId, startDate, endDate, totalPrice } = req.body;
+      if (!propertyId || !startDate || !endDate) {
+        console.log("Données incomplètes:", { propertyId, startDate, endDate });
+        return res.status(400).json({ 
+          error: "Données de réservation incomplètes",
+          message: "Veuillez fournir propertyId, startDate et endDate" 
+        });
+      }
+      
+      // S'assurer que les dates sont bien au format Date
+      const reservationData = {
+        ...req.body,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate)
+      };
+      
+      console.log("Données formatées:", reservationData);
+      
+      // Créer la réservation
+      const reservation = await storage.createReservation(reservationData);
+      
+      console.log("Réservation créée avec succès, ID:", reservation.id);
+      res.status(201).json(reservation);
+    } catch (error: any) {
+      console.error("Erreur détaillée lors de la création de la réservation:", error);
+      res.status(500).json({ 
+        error: "Erreur lors de la création de la réservation",
+        message: error.message 
+      });
     }
   });
 

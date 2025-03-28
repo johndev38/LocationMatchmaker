@@ -22,7 +22,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Info,
-  ChevronDown
+  ChevronDown,
+  CheckCircle
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -223,71 +224,136 @@ export default function MyListings() {
         console.log("ID du propriétaire trouvé:", landlordId);
         console.log("ID de la propriété trouvé:", propertyId);
 
-        // Si l'offre est acceptée, créer un contrat entre les deux parties
+        // Si l'offre est acceptée, créer une réservation entre les deux parties
         if (status === "accepted") {
           // Trouver la demande associée à cette offre
           const relatedListing = userListings.find((l: RentalListing) => l.id === originalOffer?.requestId);
           
-          // Préparer les données du contrat avec des valeurs par défaut sécurisées
-          const contractData = {
+          // Récupérer le landlordId directement de l'offre mise à jour
+          const correctLandlordId = updatedOffer.landlordId || originalOffer?.landlordId;
+          
+          if (!correctLandlordId) {
+            console.error("Aucun landlordId trouvé dans l'offre", updatedOffer, originalOffer);
+            toast({
+              title: "Erreur",
+              description: "Impossible de créer la réservation: ID du propriétaire introuvable",
+              variant: "destructive",
+            });
+            return updatedOffer;
+          }
+          
+          // S'assurer que le propertyId est correct
+          let correctPropertyId = propertyId;
+          
+          // Dernière vérification - si l'offre contient directement l'ID de la propriété dans property.id
+          if (originalOffer?.property?.id) {
+            correctPropertyId = originalOffer.property.id;
+            console.log("ID de propriété corrigé depuis l'offre originale:", correctPropertyId);
+          }
+          
+          if (!correctPropertyId) {
+            console.error("Aucun propertyId valide trouvé");
+            toast({
+              title: "Erreur",
+              description: "Impossible de créer la réservation: ID de la propriété introuvable",
+              variant: "destructive",
+            });
+            return updatedOffer;
+          }
+          
+          // Préparer les données de réservation avec les ID corrects
+          const reservationData = {
             offerId: offerId,
             tenantId: user.id,
-            landlordId: landlordId,
-            price: updatedOffer.price || (originalOffer && originalOffer.price) || 0,
-            propertyId: propertyId,
+            landlordId: correctLandlordId,
+            totalPrice: updatedOffer.price || (originalOffer && originalOffer.price) || 0,
+            propertyId: correctPropertyId,
             startDate: relatedListing?.startDate || new Date().toISOString(),
-            endDate: relatedListing?.endDate || new Date(Date.now() + 7*24*60*60*1000).toISOString()
+            endDate: relatedListing?.endDate || new Date(Date.now() + 7*24*60*60*1000).toISOString(),
+            specialRequests: "" // Champ requis par la structure
           };
           
-          // Journaliser les données du contrat avant envoi
-          console.log("Données du contrat à créer:", contractData);
+          // Journaliser les données de la réservation avant envoi
+          console.log("Données de la réservation à créer:", reservationData);
           
           try {
-            const contractResponse = await apiRequest("POST", "/api/contracts", contractData);
+            // Débuter par mettre à jour l'URL avec le protocole et le domaine complets
+            const baseUrl = window.location.origin; // ex: http://localhost:5000
+            const reservationUrl = `${baseUrl}/api/reservations`;
             
-            if (!contractResponse.ok) {
-              const errorData = await contractResponse.json();
+            console.log("URL complète pour la création de réservation:", reservationUrl);
+            
+            // Créer la réservation avec fetch directement au lieu d'utiliser apiRequest
+            const reservationResponse = await fetch(reservationUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include', // Important pour l'authentification par cookie
+              body: JSON.stringify(reservationData)
+            });
+            
+            if (!reservationResponse.ok) {
+              console.error("Réponse d'erreur:", reservationResponse.status, reservationResponse.statusText);
+              
+              // Essayer de lire le corps même en cas d'erreur
+              let errorData;
+              try {
+                const textResponse = await reservationResponse.text();
+                console.log("Réponse d'erreur brute:", textResponse);
+                
+                try {
+                  // Essayer de parser comme JSON si possible
+                  errorData = JSON.parse(textResponse);
+                } catch (e) {
+                  // Si ce n'est pas du JSON, utiliser le texte brut
+                  errorData = { error: "Erreur serveur", message: textResponse };
+                }
+              } catch (e) {
+                console.error("Impossible de lire la réponse d'erreur:", e);
+                errorData = { error: "Erreur inconnue", message: "Impossible de lire la réponse d'erreur" };
+              }
               
               // Gestion spécifique des erreurs connues
-              if (errorData.error === "PROPERTY_ALREADY_CONTRACTED") {
+              if (errorData.error === "PROPERTY_ALREADY_RESERVED") {
                 toast({
-                  title: "Contrat impossible",
-                  description: "Cette propriété est déjà sous contrat. Un seul contrat actif est autorisé par propriété.",
+                  title: "Réservation impossible",
+                  description: "Cette propriété est déjà réservée pour cette période.",
                   variant: "destructive",
                 });
-                return { updatedOffer, contract: null };
+                return { updatedOffer, reservation: null };
               }
               
               // Gestion générique des erreurs
               toast({
                 title: "Erreur",
-                description: errorData.message || "Impossible de créer le contrat",
+                description: errorData.message || `Erreur ${reservationResponse.status}: ${reservationResponse.statusText}`,
                 variant: "destructive",
               });
-              throw new Error(errorData?.message || "Erreur lors de la création du contrat");
+              throw new Error(errorData?.message || "Erreur lors de la création de la réservation");
             }
             
             // En cas de succès
-            const contract = await contractResponse.json();
+            const reservation = await reservationResponse.json();
             toast({
-              title: "Contrat créé",
-              description: "Le contrat a été créé avec succès!",
+              title: "Réservation créée",
+              description: "La réservation a été créée avec succès!",
             });
             
-            // Rediriger vers la page des contrats
+            // Rediriger vers la page des réservations
             setTimeout(() => {
-              window.location.href = "/contracts";
+              window.location.href = "/reservations";
             }, 1000);
             
-            return { updatedOffer, contract };
+            return { updatedOffer, reservation };
           } catch (error) {
-            console.error("Erreur lors de la création du contrat:", error);
+            console.error("Erreur lors de la création de la réservation:", error);
             toast({
               title: "Erreur",
               description: "Une erreur inattendue s'est produite",
               variant: "destructive",
             });
-            return { updatedOffer, contract: null };
+            return { updatedOffer, reservation: null };
           }
         }
 
@@ -300,10 +366,10 @@ export default function MyListings() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["allPropertyOffers"] });
       
-      if (data && data.contract) {
+      if (data && data.reservation) {
         toast({
           title: "Offre acceptée",
-          description: "Un contrat a été créé entre vous et le propriétaire. Vous pouvez le consulter dans la section 'Mes contrats'.",
+          description: "Une réservation a été créée entre vous et le propriétaire. Vous pouvez la consulter dans la section 'Mes réservations'.",
         });
       } else {
         toast({
@@ -397,6 +463,14 @@ export default function MyListings() {
     pending: allPropertyOffers.filter((offer: Offer) => offer.status === "pending").length,
     accepted: allPropertyOffers.filter((offer: Offer) => offer.status === "accepted").length,
     rejected: allPropertyOffers.filter((offer: Offer) => offer.status === "rejected").length
+  };
+
+  // Fonction pour confirmer l'acceptation de l'offre
+  const confirmAcceptOffer = (offerId: number) => {
+    if (confirm("Êtes-vous sûr de vouloir accepter cette offre ? Une réservation sera créée entre vous et le propriétaire.")) {
+      updateOfferStatusMutation.mutate({ offerId, status: "accepted" });
+      setSelectedOfferId(null);
+    }
   };
 
   if (loadingListings || loadingOffers) {
@@ -788,15 +862,7 @@ export default function MyListings() {
                                           </Button>
                                           <Button 
                                             className="text-sm bg-pink-600 hover:bg-pink-700"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (confirm("Êtes-vous sûr de vouloir accepter cette offre ? Un contrat sera créé entre vous et le propriétaire.")) {
-                                                updateOfferStatusMutation.mutate({ 
-                                                  offerId: offer.id, 
-                                                  status: "accepted" 
-                                                });
-                                              }
-                                            }}
+                                            onClick={() => confirmAcceptOffer(offer.id)}
                                             disabled={updateOfferStatusMutation.isPending}
                                           >
                                             {updateOfferStatusMutation.isPending && updateOfferStatusMutation.variables?.offerId === offer.id && updateOfferStatusMutation.variables?.status === "accepted" ? (
@@ -810,19 +876,16 @@ export default function MyListings() {
                                       )}
                                       
                                       {offer.status === "accepted" && (
-                                        <div className="bg-green-50 p-3 rounded-md border border-green-100 mt-4">
-                                          <p className="text-sm text-green-700 flex items-center gap-2">
-                                            <CheckCircle2 className="h-4 w-4" />
-                                            Vous avez accepté cette offre. Un contrat a été créé.
-                                          </p>
-                                          <Button
-                                            variant="link"
-                                            size="sm"
-                                            className="text-green-700 p-0 h-auto"
-                                            asChild
-                                          >
-                                            <a href="/contracts">Voir mes contrats</a>
-                                          </Button>
+                                        <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <CheckCircle className="h-4 w-4" />
+                                            <span className="font-medium">
+                                              Vous avez accepté cette offre. Une réservation a été créée.
+                                            </span>
+                                          </div>
+                                          <div className="ml-6">
+                                            <a href="/reservations">Voir mes réservations</a>
+                                          </div>
                                         </div>
                                       )}
                                     </CardContent>

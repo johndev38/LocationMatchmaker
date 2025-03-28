@@ -8,9 +8,9 @@ import type {
   Notification,
   Reservation,
 } from "@shared/schema";
-import { Contract, CreateContractData, CreateReservationData } from "./types";
-import { users, rentalRequests, propertyOffers, messages, notifications, properties, reservations, contracts } from "@shared/schema";
-import { eq, and, or } from "drizzle-orm";
+import { CreateReservationData } from "./types";
+import { users, rentalRequests, propertyOffers, messages, notifications, properties, reservations } from "@shared/schema";
+import { eq, and, or, desc } from "drizzle-orm";
 import { db } from "./db";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -198,25 +198,23 @@ export class DatabaseStorage implements IStorage {
     return updatedUser;
   }
 
-  // Méthodes pour les notifications
-  async createNotification(
-    userId: number,
-    type: string,
-    content: string,
-    relatedId?: number
-  ): Promise<Notification> {
-    const [notification] = await db
-      .insert(notifications)
-      .values({
+  // Fonction pour créer une notification avec les paramètres séparés
+  async createNotification(userId: number, type: string, content: string, relatedId?: number): Promise<Notification> {
+    try {
+      const [notification] = await db.insert(notifications).values({
         userId,
         type,
         content,
-        relatedId,
+        relatedId: relatedId || null,
         isRead: false,
         timestamp: new Date().toISOString(),
-      })
-      .returning();
-    return notification;
+      }).returning();
+      
+      return notification;
+    } catch (error) {
+      console.error("Erreur lors de la création de la notification:", error);
+      throw error;
+    }
   }
 
   async getNotifications(userId: number): Promise<Notification[]> {
@@ -224,7 +222,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(notifications)        
       .where(eq(notifications.userId, userId))
-      .orderBy(notifications.id, "desc");
+      .orderBy(desc(notifications.id));
   }   
 
   async markNotificationAsRead(notificationId: number): Promise<Notification> {
@@ -295,6 +293,45 @@ export class DatabaseStorage implements IStorage {
         notificationContent,
         offerId
       );
+      
+      // Si l'offre est acceptée, créer automatiquement une réservation
+      if (status === "accepted") {
+        try {
+          // Récupérer les informations de la propriété du propriétaire
+          const [property] = await db
+            .select()
+            .from(properties)
+            .where(eq(properties.landlordId, offer.landlordId));
+          
+          if (!property) {
+            console.error(`Propriété du propriétaire (ID: ${offer.landlordId}) non trouvée`);
+            throw new Error(`Propriété du propriétaire non trouvée`);
+          }
+          
+          // Calculer les dates de début et de fin à partir de la demande
+          const startDate = new Date(request.startDate);
+          const endDate = new Date(request.endDate);
+          
+          // Créer les données de réservation
+          const reservationData: CreateReservationData = {
+            propertyId: property.id,
+            tenantId: request.userId,
+            landlordId: offer.landlordId,
+            startDate: startDate,
+            endDate: endDate,
+            totalPrice: offer.price,
+            specialRequests: "",
+            offerId: offer.id
+          };
+          
+          // Créer la réservation
+          await this.createReservation(reservationData);
+          console.log("Réservation créée automatiquement suite à l'acceptation de l'offre");
+        } catch (error) {
+          console.error("Erreur lors de la création automatique de la réservation:", error);
+          // On ne fait pas échouer la mise à jour du statut de l'offre si la création de la réservation échoue
+        }
+      }
     }
     
     return offer;
@@ -439,324 +476,81 @@ export class DatabaseStorage implements IStorage {
 
   // Méthodes pour la gestion des contrats
   
-  // Créer un nouveau contrat
-  async createContract(contractData: CreateContractData): Promise<Contract> {
-    try {
-      // Vérifier s'il existe déjà un contrat actif pour cette propriété
-      const existingContracts = await db
-        .select()
-        .from(contracts)
-        .where(
-          and(
-            eq(contracts.propertyId, contractData.propertyId),
-            eq(contracts.status, 'active')
-          )
-        );
-      
-      if (existingContracts.length > 0) {
-        throw new Error("Cette propriété est déjà sous contrat. Impossible d'en créer un nouveau.");
-      }
-      
-      // S'assurer que les dates sont des chaînes ISO
-      const startDate = typeof contractData.startDate === 'string' 
+  // La fonction createContract est remplacée par une redirection vers createReservation
+  async createContract(contractData: CreateReservationData): Promise<Reservation> {
+    console.log("Conversion de contrat en réservation");
+    
+    // Créer une réservation avec les données du contrat
+    const reservationData: CreateReservationData = {
+      propertyId: contractData.propertyId,
+      tenantId: contractData.tenantId,
+      landlordId: contractData.landlordId,
+      startDate: typeof contractData.startDate === 'string' 
         ? contractData.startDate 
-        : contractData.startDate.toISOString();
-        
-      const endDate = typeof contractData.endDate === 'string' 
-        ? contractData.endDate 
-        : contractData.endDate.toISOString();
-      
-      console.log("Insertion d'un contrat avec les données suivantes:", {
-        ...contractData,
-        startDate,
-        endDate
-      });
-      
-      // Utiliser une approche plus robuste avec insertion directe sur la table contracts
-      const [contract] = await db
-        .insert(contracts)
-        .values({
-          offerId: contractData.offerId,
-          tenantId: contractData.tenantId,
-          landlordId: contractData.landlordId,
-          price: contractData.price,
-          propertyId: contractData.propertyId,
-          startDate,
-          endDate,
-          status: 'active',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
-        .returning();
-      
-      if (!contract) {
-        throw new Error("Erreur lors de la création du contrat - aucun contrat retourné");
-      }
-      
-      console.log("Contrat créé avec succès:", contract);
-      
-      // Mettre à jour le statut de l'offre à "accepted"
-      await this.updatePropertyOfferStatus(contractData.offerId, "accepted", contractData.tenantId);
-      
-      // Mettre à jour le statut de la demande de location à "completed"
-      // D'abord récupérer l'offre pour obtenir l'ID de la demande associée
-      const [offer] = await db.select().from(propertyOffers).where(eq(propertyOffers.id, contractData.offerId));
-      
-      if (offer && offer.requestId) {
-        await db.update(rentalRequests)
-          .set({ status: 'completed' as any })
-          .where(eq(rentalRequests.id, offer.requestId));
-      }
-      
-      return contract as unknown as Contract;
-    } catch (error) {
-      console.error("Erreur lors de la création du contrat:", error);
-      throw new Error(`Erreur lors de la création du contrat: ${error instanceof Error ? error.message : String(error)}`);
-    }
+        : contractData.startDate.toISOString(),
+      endDate: typeof contractData.endDate === 'string'
+        ? contractData.endDate
+        : contractData.endDate.toISOString(),
+      totalPrice: contractData.totalPrice || 0,
+      offerId: contractData.offerId
+    };
+    
+    return this.createReservation(reservationData);
   }
   
-  // Récupérer tous les contrats d'un utilisateur
-  async getUserContracts(userId: number): Promise<Contract[]> {
-    console.log("Récupération des contrats pour l'utilisateur:", userId);
-    
-    try {
-      // Utiliser la syntaxe ORM Drizzle standard au lieu de SQL brut
-      const userContracts = await db
-        .select()
-        .from(contracts)
-        .where(
-          or(
-            eq(contracts.tenantId, userId),
-            eq(contracts.landlordId, userId)
-          )
-        )
-        .orderBy(contracts.createdAt, "desc");
-      
-      console.log("Nombre de contrats trouvés:", userContracts.length);
-      
-      // Pour chaque contrat, récupérer les informations liées
-      const detailedContracts = await Promise.all(
-        userContracts.map(async (contract) => {
-          // Récupérer les détails de la propriété
-          const [property] = await db
-            .select()
-            .from(properties)
-            .where(eq(properties.id, contract.propertyId));
-          
-          // Récupérer les informations du locataire
-          const [tenant] = await db
-            .select()
-            .from(users)
-            .where(eq(users.id, contract.tenantId));
-          
-          if (!tenant) {
-            console.warn(`Locataire (ID: ${contract.tenantId}) non trouvé dans la base de données.`);
-          } else {
-            console.log(`Locataire trouvé: ${tenant.username} (ID: ${tenant.id})`);
-          }
-          
-          // Récupérer les informations du propriétaire
-          console.log(`Tentative de récupération du propriétaire avec ID: ${contract.landlordId}`);
-          
-          // Vérifions tous les utilisateurs pour déboguer
-          const allUsers = await db.select().from(users);
-          console.log("Tous les utilisateurs disponibles:", allUsers.map(u => ({ id: u.id, username: u.username })));
-          
-          const [landlord] = await db
-            .select()
-            .from(users)
-            .where(eq(users.id, contract.landlordId));
-          
-          if (!landlord) {
-            console.warn(`Propriétaire (ID: ${contract.landlordId}) non trouvé dans la base de données.`);
-          } else {
-            console.log(`Propriétaire trouvé: ${landlord.username} (ID: ${landlord.id})`);
-          }
-          
-          // Récupérer les détails de l'offre
-          const [offer] = await db
-            .select()
-            .from(propertyOffers)
-            .where(eq(propertyOffers.id, contract.offerId));
-          
-          // Retourner le contrat avec les détails
-          return {
-            ...contract,
-            // Convertir explicitement les dates en string
-            createdAt: contract.createdAt ? contract.createdAt.toISOString() : new Date().toISOString(),
-            updatedAt: contract.updatedAt ? contract.updatedAt.toISOString() : new Date().toISOString(),
-            startDate: contract.startDate || new Date().toISOString(),
-            endDate: contract.endDate || new Date(Date.now() + 30*24*60*60*1000).toISOString(),
-            property: property ? {
-              id: property.id,
-              title: property.title,
-              address: property.address,
-              photos: property.photos || []
-            } : {
-              id: contract.propertyId,
-              title: "Propriété inconnue",
-              address: "Adresse non disponible",
-              photos: []
-            },
-            tenant: tenant ? {
-              id: tenant.id,
-              name: tenant.username,
-              email: tenant.email
-            } : {
-              id: contract.tenantId,
-              name: "Utilisateur inconnu",
-              email: "Non disponible"
-            },
-            landlord: landlord ? {
-              id: landlord.id,
-              name: landlord.username,
-              email: landlord.email
-            } : {
-              id: contract.landlordId,
-              name: "Propriétaire inconnu",
-              email: "Non disponible"  
-            },
-            offer: offer ? {
-              id: offer.id,
-              price: contract.price,
-              description: offer.description || "",
-              availableAmenities: offer.availableAmenities || []
-            } : null
-          } as unknown as Contract;
-        })
-      );
-      
-      console.log("Contrats détaillés récupérés");
-      return detailedContracts;
-    } catch (error) {
-      console.error("Erreur lors de la récupération des contrats:", error);
-      return [];
-    }
+  // La fonction getUserContracts est remplacée par une redirection vers getUserReservations
+  async getUserContracts(userId: number): Promise<Reservation[]> {
+    console.log("Redirection vers getUserReservations");
+    return this.getUserReservations(userId);
   }
 
-  // Récupérer un contrat spécifique
-  async getContractById(contractId: number, userId: number): Promise<Contract | null> {
-    console.log("Récupération du contrat", contractId, "pour l'utilisateur", userId);
-    
-    try {
-      // Utiliser la syntaxe ORM Drizzle standard au lieu de SQL brut
-      const [contract] = await db
-        .select()
-        .from(contracts)
-        .where(
-          and(
-            eq(contracts.id, contractId),
-            or(
-              eq(contracts.tenantId, userId),
-              eq(contracts.landlordId, userId)
-            )
-          )
-        );
-      
-      if (!contract) {
-        return null;
-      }
-      
-      // Récupérer les détails de la propriété
-      const [property] = await db
-        .select()
-        .from(properties)
-        .where(eq(properties.id, contract.propertyId));
-      
-      // Récupérer les informations du locataire
-      const [tenant] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, contract.tenantId));
-      
-      // Récupérer les informations du propriétaire
-      const [landlord] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, contract.landlordId));
-      
-      // Récupérer les détails de l'offre
-      const [offer] = await db
-        .select()
-        .from(propertyOffers)
-        .where(eq(propertyOffers.id, contract.offerId));
-      
-      // Retourner le contrat avec les détails
-      return {
-        ...contract,
-        // Convertir explicitement les dates en string
-        createdAt: contract.createdAt ? contract.createdAt.toISOString() : new Date().toISOString(),
-        updatedAt: contract.updatedAt ? contract.updatedAt.toISOString() : new Date().toISOString(),
-        startDate: contract.startDate || new Date().toISOString(),
-        endDate: contract.endDate || new Date(Date.now() + 30*24*60*60*1000).toISOString(),
-        property: property ? {
-          id: property.id,
-          title: property.title,
-          address: property.address,
-          photos: property.photos || []
-        } : {
-          id: contract.propertyId,
-          title: "Propriété inconnue",
-          address: "Adresse non disponible",
-          photos: []
-        },
-        tenant: tenant ? {
-          id: tenant.id,
-          name: tenant.username,
-          email: tenant.email
-        } : {
-          id: contract.tenantId,
-          name: "Utilisateur inconnu",
-          email: "Non disponible"
-        },
-        landlord: landlord ? {
-          id: landlord.id,
-          name: landlord.username,
-          email: landlord.email
-        } : {
-          id: contract.landlordId,
-          name: "Propriétaire inconnu",
-          email: "Non disponible"  
-        },
-        offer: offer ? {
-          id: offer.id,
-          price: contract.price,
-          description: offer.description || "",
-          availableAmenities: offer.availableAmenities || []
-        } : {
-          id: contract.offerId,
-          price: contract.price,
-          description: "Aucune description disponible",
-          availableAmenities: []
-        }
-      } as unknown as Contract;
-    } catch (error) {
-      console.error("Erreur lors de la récupération du contrat:", error);
-      return null;
-    }
+  // La fonction getContractById est remplacée par une redirection vers getReservationById
+  async getContractById(contractId: number, userId: number): Promise<Reservation | null> {
+    console.log("Redirection vers getReservationById");
+    return this.getReservationById(contractId, userId);
   }
 
   // Méthodes pour les réservations
   async createReservation(reservationData: CreateReservationData): Promise<Reservation> {
     try {
-      // Vérifier que le landlord existe
-      const landlord = await db.query.users.findFirst({
-        where: eq(users.id, reservationData.landlordId),
-      });
+      console.log("Création d'une réservation avec les données:", JSON.stringify(reservationData, null, 2));
+      
+      // S'assurer que le landlordId est défini
+      if (!reservationData.landlordId) {
+        console.error("LandlordId manquant dans les données de réservation");
+        throw new Error("Le champ landlordId est requis pour créer une réservation");
+      }
 
+      // Vérifier si le propriétaire existe
+      const [landlord] = await db.select().from(users).where(
+        eq(users.id, reservationData.landlordId)
+      );
+      
+      console.log("Propriétaire trouvé:", landlord ? `${landlord.id} (${landlord.username})` : "NON TROUVÉ");
+      
       if (!landlord) {
         throw new Error(`Propriétaire (ID: ${reservationData.landlordId}) non trouvé dans la base de données`);
       }
 
-      // Vérifier que la propriété existe
-      const property = await db.query.properties.findFirst({
-        where: eq(properties.id, reservationData.propertyId),
-      });
-
+      // Vérifier si la propriété existe
+      const [property] = await db.select().from(properties).where(
+        eq(properties.id, reservationData.propertyId)
+      );
+      
+      console.log("Propriété trouvée:", property ? `${property.id} (${property.title})` : "NON TROUVÉE");
+      
       if (!property) {
         throw new Error(`Propriété (ID: ${reservationData.propertyId}) non trouvée dans la base de données`);
       }
-
+      
+      // Vérifier si le landlordId correspond à la propriété
+      if (property.landlordId !== reservationData.landlordId) {
+        console.warn(`Le landlordId (${reservationData.landlordId}) ne correspond pas au propriétaire de la propriété (${property.landlordId}). Correction...`);
+        // Utiliser le landlordId de la propriété comme valeur correcte
+        reservationData.landlordId = property.landlordId;
+      }
+      
+      // Créer la réservation
       const [newReservation] = await db.insert(reservations).values({
         propertyId: reservationData.propertyId,
         tenantId: reservationData.tenantId,
@@ -767,19 +561,20 @@ export class DatabaseStorage implements IStorage {
         status: "pending",
         paymentStatus: "unpaid",
         specialRequests: reservationData.specialRequests || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        offerId: reservationData.offerId || null
       }).returning();
-
+      
+      console.log("Réservation créée avec succès, ID:", newReservation.id);
+      
       // Créer une notification pour le propriétaire
-      await this.createNotification({
-        userId: reservationData.landlordId,
-        type: "reservation_requested",
-        content: `Une nouvelle demande de réservation a été reçue`,
-        relatedId: newReservation.id,
-        timestamp: new Date().toISOString(),
-      });
-
+      await this.createNotification(
+        reservationData.landlordId,
+        "reservation_requested",
+        `Nouvelle demande de réservation reçue`,
+        newReservation.id
+      );
+      
+      // Récupérer la réservation complète
       const reservation = await this.getReservationById(newReservation.id, reservationData.tenantId);
       if (!reservation) {
         throw new Error(`Impossible de récupérer la réservation créée avec l'ID ${newReservation.id}`);
@@ -793,81 +588,176 @@ export class DatabaseStorage implements IStorage {
 
   async getUserReservations(userId: number): Promise<Reservation[]> {
     try {
-      const userReservations = await db.query.reservations.findMany({
-        where: (reservations) => {
-          return or(
+      // Utilisons une approche plus simple sans les relations de Drizzle
+      const userReservations = await db
+        .select()
+        .from(reservations)
+        .where(
+          or(
             eq(reservations.tenantId, userId),
             eq(reservations.landlordId, userId)
-          );
-        },
-        with: {
-          property: true,
-          tenant: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          landlord: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: (reservations) => desc(reservations.createdAt),
-      });
-
-      return userReservations;
+          )
+        )
+        .orderBy(desc(reservations.createdAt));
+      
+      // Manuellement récupérer les informations liées pour chaque réservation
+      const detailedReservations = await Promise.all(
+        userReservations.map(async (reservation) => {
+          // Récupérer les détails de la propriété
+          const [property] = await db
+            .select()
+            .from(properties)
+            .where(eq(properties.id, reservation.propertyId));
+          
+          // Récupérer les informations du locataire
+          const [tenant] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, reservation.tenantId));
+          
+          // Récupérer les informations du propriétaire
+          const [landlord] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, reservation.landlordId));
+          
+          // Récupérer les détails de l'offre si offerId est présent
+          let offer = null;
+          if (reservation.offerId) {
+            const [offerData] = await db
+              .select()
+              .from(propertyOffers)
+              .where(eq(propertyOffers.id, reservation.offerId));
+            
+            if (offerData) {
+              offer = {
+                id: offerData.id,
+                price: offerData.price,
+                description: offerData.description,
+                availableAmenities: offerData.availableAmenities
+              };
+            }
+          }
+          
+          // Retourner la réservation avec les détails
+          return {
+            ...reservation,
+            property: property ? {
+              id: property.id,
+              title: property.title,
+              address: property.address,
+              photos: property.photos,
+              amenities: property.amenities
+            } : undefined,
+            tenant: tenant ? {
+              id: tenant.id,
+              name: tenant.username,
+              email: tenant.email
+            } : undefined,
+            landlord: landlord ? {
+              id: landlord.id,
+              name: landlord.username,
+              email: landlord.email
+            } : undefined,
+            offer
+          };
+        })
+      );
+      
+      return detailedReservations;
     } catch (error) {
       console.error("Erreur lors de la récupération des réservations:", error);
-      throw error;
+      return [];
     }
   }
 
   async getReservationById(reservationId: number, userId: number): Promise<Reservation | null> {
     try {
-      const reservation = await db.query.reservations.findFirst({
-        where: (reservations) => {
-          return and(
+      // Récupérer la réservation de base
+      const [reservation] = await db
+        .select()
+        .from(reservations)
+        .where(
+          and(
             eq(reservations.id, reservationId),
             or(
               eq(reservations.tenantId, userId),
               eq(reservations.landlordId, userId)
             )
-          );
-        },
-        with: {
-          property: true,
-          tenant: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          landlord: {
-            columns: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      return reservation;
+          )
+        );
+      
+      if (!reservation) {
+        return null;
+      }
+      
+      // Récupérer les détails de la propriété
+      const [property] = await db
+        .select()
+        .from(properties)
+        .where(eq(properties.id, reservation.propertyId));
+      
+      // Récupérer les informations du locataire
+      const [tenant] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, reservation.tenantId));
+      
+      // Récupérer les informations du propriétaire
+      const [landlord] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, reservation.landlordId));
+      
+      // Récupérer les détails de l'offre si offerId est présent
+      let offer = null;
+      if (reservation.offerId) {
+        const [offerData] = await db
+          .select()
+          .from(propertyOffers)
+          .where(eq(propertyOffers.id, reservation.offerId));
+        
+        if (offerData) {
+          offer = {
+            id: offerData.id,
+            price: offerData.price,
+            description: offerData.description,
+            availableAmenities: offerData.availableAmenities
+          };
+        }
+      }
+      
+      // Retourner la réservation avec les détails
+      return {
+        ...reservation,
+        property: property ? {
+          id: property.id,
+          title: property.title,
+          address: property.address,
+          photos: property.photos,
+          amenities: property.amenities
+        } : undefined,
+        tenant: tenant ? {
+          id: tenant.id,
+          name: tenant.username,
+          email: tenant.email
+        } : undefined,
+        landlord: landlord ? {
+          id: landlord.id,
+          name: landlord.username,
+          email: landlord.email
+        } : undefined,
+        offer
+      };
     } catch (error) {
       console.error("Erreur lors de la récupération de la réservation:", error);
-      throw error;
+      return null;
     }
   }
 
+  // Mise à jour de la méthode updateReservationStatus pour utiliser la bonne signature de createNotification
   async updateReservationStatus(reservationId: number, status: string, userId: number): Promise<Reservation> {
     try {
-      // Vérifier que la réservation existe et que l'utilisateur est le propriétaire
       const reservation = await db.query.reservations.findFirst({
         where: (reservations) => {
           return and(
@@ -878,13 +768,12 @@ export class DatabaseStorage implements IStorage {
       });
 
       if (!reservation) {
-        throw new Error("Réservation non trouvée ou vous n'êtes pas autorisé à la modifier");
+        throw new Error(`Réservation (ID: ${reservationId}) non trouvée ou vous n'êtes pas autorisé à la modifier`);
       }
 
-      // Mettre à jour le statut
       const [updatedReservation] = await db
         .update(reservations)
-        .set({ 
+        .set({
           status,
           updatedAt: new Date(),
         })
@@ -892,13 +781,12 @@ export class DatabaseStorage implements IStorage {
         .returning();
 
       // Créer une notification pour le locataire
-      await this.createNotification({
-        userId: reservation.tenantId,
-        type: `reservation_${status}`,
-        content: `Votre réservation a été ${status === "confirmed" ? "confirmée" : status === "cancelled" ? "annulée" : "mise à jour"}`,
-        relatedId: reservationId,
-        timestamp: new Date().toISOString(),
-      });
+      await this.createNotification(
+        reservation.tenantId,
+        `reservation_${status}`,
+        `Votre réservation a été ${status === 'confirmed' ? 'confirmée' : status === 'cancelled' ? 'annulée' : 'mise à jour'} par le propriétaire.`,
+        reservationId
+      );
 
       const result = await this.getReservationById(reservationId, userId);
       if (!result) {
@@ -911,9 +799,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Mise à jour de la méthode updateReservationPaymentStatus pour utiliser la bonne signature de createNotification
   async updateReservationPaymentStatus(reservationId: number, paymentStatus: string, userId: number): Promise<Reservation> {
     try {
-      // Vérifier que la réservation existe et que l'utilisateur est le locataire
       const reservation = await db.query.reservations.findFirst({
         where: (reservations) => {
           return and(
@@ -924,13 +812,12 @@ export class DatabaseStorage implements IStorage {
       });
 
       if (!reservation) {
-        throw new Error("Réservation non trouvée ou vous n'êtes pas autorisé à la modifier");
+        throw new Error(`Réservation (ID: ${reservationId}) non trouvée ou vous n'êtes pas autorisé à la modifier`);
       }
 
-      // Mettre à jour le statut
       const [updatedReservation] = await db
         .update(reservations)
-        .set({ 
+        .set({
           paymentStatus,
           updatedAt: new Date(),
         })
@@ -938,13 +825,12 @@ export class DatabaseStorage implements IStorage {
         .returning();
 
       // Créer une notification pour le propriétaire
-      await this.createNotification({
-        userId: reservation.landlordId,
-        type: `payment_${paymentStatus}`,
-        content: `Le paiement de la réservation est maintenant ${paymentStatus === "paid" ? "payé" : paymentStatus === "partially_paid" ? "partiellement payé" : "non payé"}`,
-        relatedId: reservationId,
-        timestamp: new Date().toISOString(),
-      });
+      await this.createNotification(
+        reservation.landlordId,
+        `payment_${paymentStatus}`,
+        `Le statut de paiement de la réservation a été mis à jour à "${paymentStatus}" par le locataire.`,
+        reservationId
+      );
 
       const result = await this.getReservationById(reservationId, userId);
       if (!result) {
@@ -952,7 +838,7 @@ export class DatabaseStorage implements IStorage {
       }
       return result;
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du statut de paiement de la réservation:", error);
+      console.error("Erreur lors de la mise à jour du statut de paiement:", error);
       throw error;
     }
   }
@@ -963,7 +849,7 @@ export class DatabaseStorage implements IStorage {
         where: eq(users.id, userId),
       });
 
-      return user;
+      return user || null;
     } catch (error) {
       console.error("Erreur lors de la récupération de l'utilisateur:", error);
       return null;

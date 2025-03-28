@@ -75,10 +75,10 @@ export interface IStorage {
   getLandlordOffers(landlordId: number): Promise<PropertyOffer[]>;
   createPropertyOfferWithNotification(landlordId: number, offer: Omit<PropertyOffer, "id" | "landlordId" | "status">): Promise<PropertyOffer>;
   
-  // Méthodes pour la gestion des contrats
-  createContract(contractData: CreateContractData): Promise<Contract>;
-  getUserContracts(userId: number): Promise<Contract[]>;
-  getContractById(contractId: number, userId: number): Promise<Contract | null>;
+  // Méthodes pour la gestion des contrats (redirigées vers les réservations)
+  createContract(contractData: CreateReservationData): Promise<Reservation>;
+  getUserContracts(userId: number): Promise<Reservation[]>;
+  getContractById(contractId: number, userId: number): Promise<Reservation | null>;
   
   // Méthodes pour les réservations
   createReservation(reservationData: CreateReservationData): Promise<Reservation>;
@@ -92,8 +92,9 @@ export interface CreateReservationData {
   propertyId: number;
   tenantId: number;
   landlordId: number;
-  startDate: string;
-  endDate: string;
+  startDate: string | Date;
+  endDate: string | Date;
   totalPrice: number;
   specialRequests?: string;
+  offerId?: number;
 }

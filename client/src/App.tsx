@@ -14,7 +14,6 @@ import MyInformation from "./pages/MyInformation";
 import LandlordOffers from "./pages/landlord-offers";
 import SearchLocations from "./pages/search-locations";
 import MyProperty from "./pages/my-property";
-import ContractsPage from "./pages/contracts";
 import ReservationsPage from "./pages/reservations";
 
 function App() {
@@ -35,7 +34,6 @@ function App() {
               <Route path="/profile" element={<MyInformation />} />
               <Route path="/landlord-offers" element={<LandlordOffers />} />
               <Route path="/my-property" element={<MyProperty />} />
-              <Route path="/contracts" element={<ContractsPage />} />
               <Route path="/reservations" element={<ReservationsPage />} />
             </Route>
 

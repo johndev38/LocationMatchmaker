@@ -1,6 +1,7 @@
 import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -58,21 +59,6 @@ export const properties = pgTable("properties", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Définition de la table des contrats
-export const contracts = pgTable("contracts", {
-  id: serial("id").primaryKey(),
-  offerId: integer("offer_id").notNull(),
-  tenantId: integer("tenant_id").notNull(),
-  landlordId: integer("landlord_id").notNull(),
-  propertyId: integer("property_id").notNull(),
-  price: integer("price").notNull(),
-  startDate: text("start_date").notNull(),
-  endDate: text("end_date").notNull(),
-  status: text("status").notNull().default("active"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 // Nouvelle table pour les réservations
 export const reservations = pgTable("reservations", {
   id: serial("id").primaryKey(),
@@ -85,6 +71,7 @@ export const reservations = pgTable("reservations", {
   status: text("status").notNull().default("pending"), // pending, confirmed, cancelled, completed
   paymentStatus: text("payment_status").notNull().default("unpaid"), // unpaid, partially_paid, paid
   specialRequests: text("special_requests"),
+  offerId: integer("offer_id"), // Ajout d'un champ pour lier à une offre (si applicable)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -217,6 +204,7 @@ export const insertReservationSchema = createInsertSchema(reservations)
     startDate: z.date(),
     endDate: z.date().refine(date => date >= new Date(), "La date de fin doit être dans le futur"),
     specialRequests: z.string().optional(),
+    offerId: z.number().optional(),
   });
 
 export const updateReservationSchema = createInsertSchema(reservations)
@@ -253,12 +241,49 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   timestamp: true,
 });
 
+// Relations pour les réservations
+export const reservationsRelations = relations(reservations, ({ one }) => ({
+  property: one(properties, {
+    fields: [reservations.propertyId],
+    references: [properties.id],
+  }),
+  tenant: one(users, {
+    fields: [reservations.tenantId],
+    references: [users.id],
+    relationName: "tenant",
+  }),
+  landlord: one(users, {
+    fields: [reservations.landlordId],
+    references: [users.id],
+    relationName: "landlord",
+  }),
+}));
+
+// Relations pour les propriétés
+export const propertiesRelations = relations(properties, ({ one }) => ({
+  landlord: one(users, {
+    fields: [properties.landlordId],
+    references: [users.id],
+  }),
+}));
+
+// Relations pour les offres de propriété
+export const propertyOffersRelations = relations(propertyOffers, ({ one }) => ({
+  landlord: one(users, {
+    fields: [propertyOffers.landlordId],
+    references: [users.id],
+  }),
+  request: one(rentalRequests, {
+    fields: [propertyOffers.requestId],
+    references: [rentalRequests.id],
+  }),
+}));
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type RentalRequest = typeof rentalRequests.$inferSelect;
 export type PropertyOffer = typeof propertyOffers.$inferSelect;
 export type Property = typeof properties.$inferSelect;
-export type Contract = typeof contracts.$inferSelect;
 export type Reservation = typeof reservations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;

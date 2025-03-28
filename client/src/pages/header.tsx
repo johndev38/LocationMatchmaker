@@ -23,10 +23,6 @@ export default function Header() {
       href: "/landlord-offers",
     },
     {
-      title: "Mes contrats",
-      href: "/contracts",
-    },
-    {
       title: "Mes réservations",
       href: "/reservations",
     },
@@ -78,9 +74,6 @@ export default function Header() {
           )}
           {user ? (
             <>
-              <Link to="/contracts" className="transition hover:text-pink-500">
-                <Button variant="ghost">Mes contrats</Button>
-              </Link>
               <Link to="/reservations" className="transition hover:text-pink-500">
                 <Button variant="ghost">Mes réservations</Button>
               </Link>
