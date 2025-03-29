@@ -23,7 +23,8 @@ import {
   ArrowRight,
   Info,
   ChevronDown,
-  CheckCircle
+  CheckCircle,
+  Map as MapIcon
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -41,6 +42,24 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import useEmblaCarousel from "embla-carousel-react";
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Libraries } from "@react-google-maps/api";
+
+// Définir les bibliothèques Google Maps comme constante statique en dehors du composant
+const googleMapsLibraries: Libraries = ["places"];
+
+// Style personnalisé pour la carte
+const mapContainerStyle = {
+  width: '100%',
+  height: '400px'
+};
+
+// Options par défaut pour la carte Google Maps
+const defaultMapOptions = {
+  disableDefaultUI: true,
+  zoomControl: true,
+  scrollwheel: true,
+  fullscreenControl: true,
+};
 
 interface Property {
   id?: number;
@@ -63,6 +82,10 @@ interface Offer {
     id?: number;
     name: string;
     avatar?: string;
+  };
+  coordinates?: {
+    lat: number;
+    lng: number;
   };
 }
 
@@ -96,6 +119,51 @@ export default function MyListings() {
   const [showOffersList, setShowOffersList] = useState(true);
   const [showListingsSection, setShowListingsSection] = useState(false);
   const [expandedListings, setExpandedListings] = useState<Record<number, boolean>>({});
+  const [selectedMapOffer, setSelectedMapOffer] = useState<Offer | null>(null);
+  const [mapDialogOpen, setMapDialogOpen] = useState(false);
+  const [geocodedOffers, setGeocodedOffers] = useState<Offer[]>([]);
+
+  // Chargement de l'API Google Maps
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: "AIzaSyAwAe2WoKH9Th_sqMG3ffpienZDHSk3Zik",
+    libraries: googleMapsLibraries,
+  });
+
+  // Fonction pour ouvrir la carte
+  const openMapDialog = (offer: Offer) => {
+    setSelectedMapOffer(offer);
+    setMapDialogOpen(true);
+  };
+
+  // Fonction pour convertir une adresse en coordonnées géographiques
+  const geocodeAddress = useCallback(async (address: string): Promise<{lat: number, lng: number} | null> => {
+    if (!isLoaded || loadError) return null;
+    
+    try {
+      const geocoder = new google.maps.Geocoder();
+      const result = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+        geocoder.geocode({ address }, (results, status) => {
+          if (status === google.maps.GeocoderStatus.OK && results) {
+            resolve(results);
+          } else {
+            reject(status);
+          }
+        });
+      });
+      
+      if (result && result[0] && result[0].geometry?.location) {
+        const location = result[0].geometry.location;
+        return {
+          lat: location.lat(),
+          lng: location.lng()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error("Erreur de géocodage:", error);
+      return null;
+    }
+  }, [isLoaded, loadError]);
 
   // Fonction pour basculer l'état d'expansion d'une annonce
   const toggleListingExpansion = (listingId: number) => {
@@ -153,6 +221,27 @@ export default function MyListings() {
     },
     enabled: userListings.length > 0,
   });
+
+  // Géocodage des adresses des offres quand les données sont chargées
+  useEffect(() => {
+    if (!isLoaded || loadError || allPropertyOffers.length === 0) return;
+    
+    const geocodeOffers = async () => {
+      const offersWithCoordinates = await Promise.all(
+        allPropertyOffers.map(async (offer) => {
+          if (offer.property?.address && !offer.coordinates) {
+            const coordinates = await geocodeAddress(offer.property.address);
+            return { ...offer, coordinates };
+          }
+          return offer;
+        })
+      );
+      
+      setGeocodedOffers(offersWithCoordinates);
+    };
+    
+    geocodeOffers();
+  }, [isLoaded, loadError, allPropertyOffers, geocodeAddress]);
 
   // Mutation pour mettre à jour le statut d'une offre
   const updateOfferStatusMutation = useMutation({
@@ -551,6 +640,71 @@ export default function MyListings() {
         </DialogContent>
       </Dialog>
 
+      {/* Map Dialog */}
+      <Dialog open={mapDialogOpen} onOpenChange={setMapDialogOpen}>
+        <DialogContent className="sm:max-w-4xl p-4">
+          <DialogTitle className="mb-4 flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-pink-500" />
+            {selectedMapOffer?.property?.title || "Adresse de la propriété"}
+          </DialogTitle>
+          
+          {isLoaded && selectedMapOffer?.coordinates ? (
+            <div className="rounded-xl overflow-hidden border">
+              <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={selectedMapOffer.coordinates}
+                zoom={15}
+                options={{
+                  ...defaultMapOptions,
+                  mapTypeControl: true,
+                  streetViewControl: true,
+                }}
+              >
+                <Marker
+                  position={selectedMapOffer.coordinates}
+                  title={selectedMapOffer.property?.title || "Propriété"}
+                  animation={google.maps.Animation.DROP}
+                />
+              </GoogleMap>
+              <div className="p-4 bg-gray-50 text-gray-700 flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-pink-500 flex-shrink-0" />
+                <span className="font-medium">{selectedMapOffer.property?.address || "Adresse non disponible"}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="h-[400px] w-full flex items-center justify-center bg-gray-100 rounded-lg">
+              {loadError ? (
+                <div className="text-red-500">Erreur de chargement de la carte</div>
+              ) : !isLoaded ? (
+                <Loader2 className="h-8 w-8 animate-spin text-pink-500" />
+              ) : (
+                <div className="text-gray-500">Coordonnées non disponibles pour cette adresse</div>
+              )}
+            </div>
+          )}
+          
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setMapDialogOpen(false)}>
+              Fermer
+            </Button>
+            {selectedMapOffer?.coordinates && (
+              <Button 
+                className="bg-pink-600 hover:bg-pink-700"
+                onClick={() => {
+                  if (selectedMapOffer.coordinates) {
+                    const url = `https://www.google.com/maps/search/?api=1&query=${selectedMapOffer.coordinates.lat},${selectedMapOffer.coordinates.lng}`;
+                    window.open(url, '_blank');
+                  }
+                }}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Ouvrir dans Google Maps
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="container mx-auto px-4 py-8 pt-24 max-w-6xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
@@ -764,6 +918,23 @@ export default function MyListings() {
                                           <p className="text-gray-600 flex items-center gap-1 mt-1">
                                             <MapPin className="h-4 w-4" />
                                             {offer.property?.address}
+                                            {isLoaded && geocodedOffers.find(o => o.id === offer.id)?.coordinates && (
+                                              <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="h-6 px-2 py-0 ml-1 text-pink-600"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const offerWithCoords = geocodedOffers.find(o => o.id === offer.id);
+                                                  if (offerWithCoords) {
+                                                    openMapDialog(offerWithCoords);
+                                                  }
+                                                }}
+                                              >
+                                                <MapIcon className="h-3 w-3 mr-1" />
+                                                Voir sur la carte
+                                              </Button>
+                                            )}
                                           </p>
                                         </div>
                                         <div className="text-right">
@@ -789,6 +960,41 @@ export default function MyListings() {
                                       <div className="mb-4">
                                         <p className="text-sm text-gray-700">{offer.description}</p>
                                       </div>
+                                      
+                                      {/* Miniature de carte si les coordonnées sont disponibles */}
+                                      {isLoaded && geocodedOffers.find(o => o.id === offer.id)?.coordinates && (
+                                        <div 
+                                          className="mb-4 rounded-md overflow-hidden border border-gray-200 h-[200px] relative cursor-pointer"
+                                          onClick={() => {
+                                            const offerWithCoords = geocodedOffers.find(o => o.id === offer.id);
+                                            if (offerWithCoords) {
+                                              openMapDialog(offerWithCoords);
+                                            }
+                                          }}
+                                        >
+                                          <GoogleMap
+                                            mapContainerStyle={{ width: '100%', height: '100%' }}
+                                            center={geocodedOffers.find(o => o.id === offer.id)?.coordinates}
+                                            zoom={13}
+                                            options={{
+                                              ...defaultMapOptions,
+                                              disableDefaultUI: true,
+                                              zoomControl: false,
+                                              scrollwheel: false,
+                                              fullscreenControl: false,
+                                              clickableIcons: false,
+                                              draggable: false
+                                            }}
+                                          >
+                                            <Marker
+                                              position={geocodedOffers.find(o => o.id === offer.id)?.coordinates!}
+                                            />
+                                          </GoogleMap>
+                                          <div className="absolute bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm p-2 text-xs text-center">
+                                            Cliquez pour agrandir la carte
+                                          </div>
+                                        </div>
+                                      )}
                                       
                                       {/* Compteur de correspondance */}
                                       <div className="bg-gray-50 p-3 rounded-md mb-4">

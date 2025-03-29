@@ -210,7 +210,7 @@ export class DatabaseStorage implements IStorage {
         timestamp: new Date().toISOString(),
       }).returning();
       
-      return notification;
+    return notification;
     } catch (error) {
       console.error("Erreur lors de la création de la notification:", error);
       throw error;
@@ -585,7 +585,7 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
-
+  
   async getUserReservations(userId: number): Promise<Reservation[]> {
     try {
       // Utilisons une approche plus simple sans les relations de Drizzle
@@ -625,8 +625,8 @@ export class DatabaseStorage implements IStorage {
           let offer = null;
           if (reservation.offerId) {
             const [offerData] = await db
-              .select()
-              .from(propertyOffers)
+            .select()
+            .from(propertyOffers)
               .where(eq(propertyOffers.id, reservation.offerId));
             
             if (offerData) {
@@ -713,8 +713,8 @@ export class DatabaseStorage implements IStorage {
       let offer = null;
       if (reservation.offerId) {
         const [offerData] = await db
-          .select()
-          .from(propertyOffers)
+        .select()
+        .from(propertyOffers)
           .where(eq(propertyOffers.id, reservation.offerId));
         
         if (offerData) {
@@ -773,7 +773,7 @@ export class DatabaseStorage implements IStorage {
 
       const [updatedReservation] = await db
         .update(reservations)
-        .set({
+        .set({ 
           status,
           updatedAt: new Date(),
         })
@@ -817,7 +817,7 @@ export class DatabaseStorage implements IStorage {
 
       const [updatedReservation] = await db
         .update(reservations)
-        .set({
+        .set({ 
           paymentStatus,
           updatedAt: new Date(),
         })
