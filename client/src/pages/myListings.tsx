@@ -50,7 +50,7 @@ const googleMapsLibraries: Libraries = ["places"];
 // Style personnalisé pour la carte
 const mapContainerStyle = {
   width: '100%',
-  height: '400px'
+  height: '500px'
 };
 
 // Options par défaut pour la carte Google Maps
@@ -658,6 +658,12 @@ export default function MyListings() {
                   ...defaultMapOptions,
                   mapTypeControl: true,
                   streetViewControl: true,
+                  mapTypeControlOptions: {
+                    position: google.maps.ControlPosition.TOP_RIGHT,
+                  },
+                  zoomControlOptions: {
+                    position: google.maps.ControlPosition.RIGHT_CENTER,
+                  }
                 }}
               >
                 <Marker
@@ -672,7 +678,7 @@ export default function MyListings() {
               </div>
             </div>
           ) : (
-            <div className="h-[400px] w-full flex items-center justify-center bg-gray-100 rounded-lg">
+            <div className="h-[500px] w-full flex items-center justify-center bg-gray-100 rounded-lg">
               {loadError ? (
                 <div className="text-red-500">Erreur de chargement de la carte</div>
               ) : !isLoaded ? (
@@ -883,219 +889,217 @@ export default function MyListings() {
                                 key={offer.id} 
                                 className="overflow-hidden border-0 shadow-sm hover:shadow-md transition-all"
                               >
-                                <div className="flex flex-col md:flex-row">
-                                  {/* Miniature de photo */}
-                                  {offer.property?.photos && offer.property.photos.length > 0 ? (
-                                    <div 
-                                      className="h-48 md:w-1/4 bg-gray-100 relative cursor-pointer overflow-hidden group"
-                                      onClick={(e) => openPhotoGallery(offer, 0, e)}
-                                    >
-                                      <img
-                                        src={offer.property.photos[0]}
-                                        alt="Aperçu de la propriété"
-                                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                                      />
-                                      {offer.property.photos.length > 1 && (
-                                        <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
-                                          +{offer.property.photos.length - 1}
-                                        </div>
-                                      )}
-                                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                        <span className="text-white text-sm font-medium">Voir les photos</span>
+                                {/* Section photos en pleine largeur */}
+                                {offer.property?.photos && offer.property.photos.length > 0 ? (
+                                  <div 
+                                    className="h-[400px] w-full bg-gray-100 relative cursor-pointer overflow-hidden group"
+                                    onClick={(e) => openPhotoGallery(offer, 0, e)}
+                                  >
+                                    <img
+                                      src={offer.property.photos[0]}
+                                      alt="Aperçu de la propriété"
+                                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                    />
+                                    {offer.property.photos.length > 1 && (
+                                      <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-2 rounded-full text-sm font-medium">
+                                        Voir les {offer.property.photos.length} photos
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <span className="text-white text-lg font-medium">Voir toutes les photos</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="h-[400px] w-full bg-gray-100 flex items-center justify-center">
+                                    <Home className="h-16 w-16 text-gray-300" />
+                                  </div>
+                                )}
+
+                                <div className="w-full">
+                                  <CardContent className="p-4">
+                                    <div className="flex justify-between items-start mb-3">
+                                      <div>
+                                        <h4 className="text-xl font-semibold text-gray-800">{offer.property?.title || "Propriété"}</h4>
+                                        <p className="text-gray-600 flex items-center gap-1 mt-1">
+                                          <MapPin className="h-4 w-4" />
+                                          {offer.property?.address}
+                                          {isLoaded && geocodedOffers.find(o => o.id === offer.id)?.coordinates && (
+                                            <Button 
+                                              variant="ghost" 
+                                              size="sm" 
+                                              className="h-6 px-2 py-0 ml-1 text-pink-600"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const offerWithCoords = geocodedOffers.find(o => o.id === offer.id);
+                                                if (offerWithCoords) {
+                                                  openMapDialog(offerWithCoords);
+                                                }
+                                              }}
+                                            >
+                                              <MapIcon className="h-3 w-3 mr-1" />
+                                              Voir sur la carte
+                                            </Button>
+                                          )}
+                                        </p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-2xl font-bold text-pink-600">{offer.price} €</p>
+                                        <Badge
+                                          className={
+                                            offer.status === "accepted"
+                                              ? "bg-green-100 text-green-800"
+                                              : offer.status === "rejected"
+                                              ? "bg-rose-100 text-rose-800"
+                                              : "bg-orange-100 text-orange-800"
+                                          }
+                                        >
+                                          {offer.status === "pending"
+                                            ? "En attente"
+                                            : offer.status === "accepted"
+                                            ? "Acceptée"
+                                            : "Refusée"}
+                                        </Badge>
                                       </div>
                                     </div>
-                                  ) : (
-                                    <div className="h-48 md:w-1/4 bg-gray-100 flex items-center justify-center">
-                                      <Home className="h-10 w-10 text-gray-300" />
+
+                                    <div className="mb-4">
+                                      <p className="text-sm text-gray-700">{offer.description}</p>
                                     </div>
-                                  )}
-
-                                  <div className="md:w-3/4">
-                                    <CardContent className="p-4">
-                                      <div className="flex justify-between items-start mb-3">
-                                        <div>
-                                          <h4 className="text-xl font-semibold text-gray-800">{offer.property?.title || "Propriété"}</h4>
-                                          <p className="text-gray-600 flex items-center gap-1 mt-1">
-                                            <MapPin className="h-4 w-4" />
-                                            {offer.property?.address}
-                                            {isLoaded && geocodedOffers.find(o => o.id === offer.id)?.coordinates && (
-                                              <Button 
-                                                variant="ghost" 
-                                                size="sm" 
-                                                className="h-6 px-2 py-0 ml-1 text-pink-600"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const offerWithCoords = geocodedOffers.find(o => o.id === offer.id);
-                                                  if (offerWithCoords) {
-                                                    openMapDialog(offerWithCoords);
-                                                  }
-                                                }}
-                                              >
-                                                <MapIcon className="h-3 w-3 mr-1" />
-                                                Voir sur la carte
-                                              </Button>
-                                            )}
-                                          </p>
-                                        </div>
-                                        <div className="text-right">
-                                          <p className="text-2xl font-bold text-pink-600">{offer.price} €</p>
-                                          <Badge
-                                            className={
-                                              offer.status === "accepted"
-                                                ? "bg-green-100 text-green-800"
-                                                : offer.status === "rejected"
-                                                ? "bg-rose-100 text-rose-800"
-                                                : "bg-orange-100 text-orange-800"
-                                            }
-                                          >
-                                            {offer.status === "pending"
-                                              ? "En attente"
-                                              : offer.status === "accepted"
-                                              ? "Acceptée"
-                                              : "Refusée"}
-                                          </Badge>
-                                        </div>
-                                      </div>
-
-                                      <div className="mb-4">
-                                        <p className="text-sm text-gray-700">{offer.description}</p>
-                                      </div>
-                                      
-                                      {/* Miniature de carte si les coordonnées sont disponibles */}
-                                      {isLoaded && geocodedOffers.find(o => o.id === offer.id)?.coordinates && (
-                                        <div 
-                                          className="mb-4 rounded-md overflow-hidden border border-gray-200 h-[200px] relative cursor-pointer"
-                                          onClick={() => {
-                                            const offerWithCoords = geocodedOffers.find(o => o.id === offer.id);
-                                            if (offerWithCoords) {
-                                              openMapDialog(offerWithCoords);
-                                            }
+                                    
+                                    {/* Miniature de carte si les coordonnées sont disponibles */}
+                                    {isLoaded && geocodedOffers.find(o => o.id === offer.id)?.coordinates && (
+                                      <div 
+                                        className="mb-4 rounded-md overflow-hidden border border-gray-200 h-[300px] relative cursor-pointer"
+                                        onClick={() => {
+                                          const offerWithCoords = geocodedOffers.find(o => o.id === offer.id);
+                                          if (offerWithCoords) {
+                                            openMapDialog(offerWithCoords);
+                                          }
+                                        }}
+                                      >
+                                        <GoogleMap
+                                          mapContainerStyle={{ width: '100%', height: '100%' }}
+                                          center={geocodedOffers.find(o => o.id === offer.id)?.coordinates}
+                                          zoom={14}
+                                          options={{
+                                            ...defaultMapOptions,
+                                            disableDefaultUI: true,
+                                            zoomControl: false,
+                                            scrollwheel: false,
+                                            fullscreenControl: false,
+                                            clickableIcons: false,
+                                            draggable: false
                                           }}
                                         >
-                                          <GoogleMap
-                                            mapContainerStyle={{ width: '100%', height: '100%' }}
-                                            center={geocodedOffers.find(o => o.id === offer.id)?.coordinates}
-                                            zoom={13}
-                                            options={{
-                                              ...defaultMapOptions,
-                                              disableDefaultUI: true,
-                                              zoomControl: false,
-                                              scrollwheel: false,
-                                              fullscreenControl: false,
-                                              clickableIcons: false,
-                                              draggable: false
-                                            }}
-                                          >
-                                            <Marker
-                                              position={geocodedOffers.find(o => o.id === offer.id)?.coordinates!}
-                                            />
-                                          </GoogleMap>
-                                          <div className="absolute bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm p-2 text-xs text-center">
-                                            Cliquez pour agrandir la carte
-                                          </div>
-                                        </div>
-                                      )}
-                                      
-                                      {/* Compteur de correspondance */}
-                                      <div className="bg-gray-50 p-3 rounded-md mb-4">
-                                        <div className="flex justify-between items-center mb-2">
-                                          <p className="text-sm font-medium text-gray-700">Satisfaction de vos critères</p>
-                                          <p className={`text-sm font-semibold ${
-                                            percentage >= 80 ? 'text-green-600' : 
-                                            percentage >= 50 ? 'text-amber-600' : 
-                                            'text-red-600'
-                                          }`}>
-                                            {matchCount}/{totalCount} ({percentage}%)
-                                          </p>
-                                        </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                          <div 
-                                            className={`h-2 rounded-full ${
-                                              percentage >= 80 ? 'bg-green-500' : 
-                                              percentage >= 50 ? 'bg-amber-500' : 
-                                              'bg-red-500'
-                                            }`} 
-                                            style={{ width: `${percentage}%` }}
-                                          ></div>
+                                          <Marker
+                                            position={geocodedOffers.find(o => o.id === offer.id)?.coordinates!}
+                                          />
+                                        </GoogleMap>
+                                        <div className="absolute bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm p-2 text-xs font-medium text-center">
+                                          Cliquez pour agrandir la carte
                                         </div>
                                       </div>
+                                    )}
+                                    
+                                    {/* Compteur de correspondance */}
+                                    <div className="bg-gray-50 p-3 rounded-md mb-4">
+                                      <div className="flex justify-between items-center mb-2">
+                                        <p className="text-sm font-medium text-gray-700">Satisfaction de vos critères</p>
+                                        <p className={`text-sm font-semibold ${
+                                          percentage >= 80 ? 'text-green-600' : 
+                                          percentage >= 50 ? 'text-amber-600' : 
+                                          'text-red-600'
+                                        }`}>
+                                          {matchCount}/{totalCount} ({percentage}%)
+                                        </p>
+                                      </div>
+                                      <div className="w-full bg-gray-200 rounded-full h-2">
+                                        <div 
+                                          className={`h-2 rounded-full ${
+                                            percentage >= 80 ? 'bg-green-500' : 
+                                            percentage >= 50 ? 'bg-amber-500' : 
+                                            'bg-red-500'
+                                          }`} 
+                                          style={{ width: `${percentage}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
 
-                                      {/* Aménités qui correspondent */}
-                                      <div className="mb-4">
-                                        <h5 className="text-sm font-medium text-gray-700 mb-2">Aménités disponibles</h5>
-                                        <div className="flex flex-wrap gap-2">
-                                          {listing.amenities && listing.amenities.map((amenity: string) => {
-                                            const isIncluded = offer.availableAmenities?.includes(amenity);
-                                            return (
-                                              <Badge
-                                                key={amenity}
-                                                variant="outline"
-                                                className={`capitalize text-xs inline-flex items-center gap-1 ${isIncluded 
-                                                  ? 'bg-green-50 text-green-700 border-green-200' 
-                                                  : 'bg-gray-50 text-gray-500 border-gray-200'}`}
-                                              >
-                                                {isIncluded ? (
-                                                  <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
-                                                ) : (
-                                                  <XCircle className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                                                )}
-                                                {amenity.replace(/_/g, " ")}
-                                              </Badge>
-                                            );
-                                          })}
+                                    {/* Aménités qui correspondent */}
+                                    <div className="mb-4">
+                                      <h5 className="text-sm font-medium text-gray-700 mb-2">Aménités disponibles</h5>
+                                      <div className="flex flex-wrap gap-2">
+                                        {listing.amenities && listing.amenities.map((amenity: string) => {
+                                          const isIncluded = offer.availableAmenities?.includes(amenity);
+                                          return (
+                                            <Badge
+                                              key={amenity}
+                                              variant="outline"
+                                              className={`capitalize text-xs inline-flex items-center gap-1 ${isIncluded 
+                                                ? 'bg-green-50 text-green-700 border-green-200' 
+                                                : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                                            >
+                                              {isIncluded ? (
+                                                <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                              ) : (
+                                                <XCircle className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                                              )}
+                                              {amenity.replace(/_/g, " ")}
+                                            </Badge>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                    
+                                    {offer.status === "pending" && (
+                                      <div className="flex justify-end gap-2 mt-4">
+                                        <Button 
+                                          variant="outline"
+                                          className="text-sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm("Êtes-vous sûr de vouloir refuser cette offre ?")) {
+                                              updateOfferStatusMutation.mutate({ 
+                                                offerId: offer.id, 
+                                                status: "rejected" 
+                                              });
+                                            }
+                                          }}
+                                          disabled={updateOfferStatusMutation.isPending}
+                                        >
+                                          {updateOfferStatusMutation.isPending && updateOfferStatusMutation.variables?.offerId === offer.id && updateOfferStatusMutation.variables?.status === "rejected" ? (
+                                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                          ) : "Refuser"}
+                                        </Button>
+                                        <Button 
+                                          className="text-sm bg-pink-600 hover:bg-pink-700"
+                                          onClick={() => confirmAcceptOffer(offer.id)}
+                                          disabled={updateOfferStatusMutation.isPending}
+                                        >
+                                          {updateOfferStatusMutation.isPending && updateOfferStatusMutation.variables?.offerId === offer.id && updateOfferStatusMutation.variables?.status === "accepted" ? (
+                                            <>
+                                              <Loader2 className="h-4 w-4 mr-1 animate-spin" /> 
+                                              Traitement...
+                                            </>
+                                          ) : "Accepter"}
+                                        </Button>
+                                      </div>
+                                    )}
+                                    
+                                    {offer.status === "accepted" && (
+                                      <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <CheckCircle className="h-4 w-4" />
+                                          <span className="font-medium">
+                                            Vous avez accepté cette offre. Une réservation a été créée.
+                                          </span>
+                                        </div>
+                                        <div className="ml-6">
+                                          <a href="/reservations">Voir mes réservations</a>
                                         </div>
                                       </div>
-                                      
-                                      {offer.status === "pending" && (
-                                        <div className="flex justify-end gap-2 mt-4">
-                                          <Button 
-                                            variant="outline"
-                                            className="text-sm"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (confirm("Êtes-vous sûr de vouloir refuser cette offre ?")) {
-                                                updateOfferStatusMutation.mutate({ 
-                                                  offerId: offer.id, 
-                                                  status: "rejected" 
-                                                });
-                                              }
-                                            }}
-                                            disabled={updateOfferStatusMutation.isPending}
-                                          >
-                                            {updateOfferStatusMutation.isPending && updateOfferStatusMutation.variables?.offerId === offer.id && updateOfferStatusMutation.variables?.status === "rejected" ? (
-                                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                            ) : "Refuser"}
-                                          </Button>
-                                          <Button 
-                                            className="text-sm bg-pink-600 hover:bg-pink-700"
-                                            onClick={() => confirmAcceptOffer(offer.id)}
-                                            disabled={updateOfferStatusMutation.isPending}
-                                          >
-                                            {updateOfferStatusMutation.isPending && updateOfferStatusMutation.variables?.offerId === offer.id && updateOfferStatusMutation.variables?.status === "accepted" ? (
-                                              <>
-                                                <Loader2 className="h-4 w-4 mr-1 animate-spin" /> 
-                                                Traitement...
-                                              </>
-                                            ) : "Accepter"}
-                                          </Button>
-                                        </div>
-                                      )}
-                                      
-                                      {offer.status === "accepted" && (
-                                        <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <CheckCircle className="h-4 w-4" />
-                                            <span className="font-medium">
-                                              Vous avez accepté cette offre. Une réservation a été créée.
-                                            </span>
-                                          </div>
-                                          <div className="ml-6">
-                                            <a href="/reservations">Voir mes réservations</a>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </CardContent>
-                                  </div>
+                                    )}
+                                  </CardContent>
                                 </div>
                               </Card>
                             );
